@@ -328,6 +328,7 @@ function refreshKeybindUI() {
 }
 
 document.getElementById('toggle-sound').checked = settings.sound;
+const toggleAuto = document.getElementById('toggle-auto'); if (toggleAuto) toggleAuto.checked = !!settings.auto;
 const setupNight = document.getElementById('setup-night'); if (setupNight) setupNight.checked = settings.night;
 const freeNight = document.getElementById('setup-night-free'); if (freeNight) freeNight.checked = settings.night;
 const hostNight = document.getElementById('setup-night-host'); if (hostNight) hostNight.checked = settings.night;
@@ -2852,7 +2853,7 @@ window.addEventListener('keyup', (e) => {
       }
     }
 
-    if (!currentlyOnTrack && window.kart.grounded) {
+    if (!currentlyOnTrack && window.kart.grounded && window.kart.boostTimer <= 0) {
       const dragRate = 45;
       if (window.kart.speedForward > window.kart.grassMaxSpeed) window.kart.speedForward = Math.max(window.kart.grassMaxSpeed, window.kart.speedForward - dragRate * dt);
       else if (window.kart.speedForward < -window.kart.grassMaxSpeed) window.kart.speedForward = Math.min(-window.kart.grassMaxSpeed, window.kart.speedForward + dragRate * dt);
