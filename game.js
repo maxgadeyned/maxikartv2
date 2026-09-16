@@ -600,6 +600,11 @@ function getGridSpawn(slot) {
 window.getGridSpawn = getGridSpawn;
 
 function clearRaceIntro() {
+  const ri = window.raceIntro;
+  if (ri && ri.baseFov != null && window._raceCam) {
+    window._raceCam.fov = ri.baseFov;
+    window._raceCam.updateProjectionMatrix();
+  }
   window.raceIntro = null;
   const ui = document.getElementById('raceIntroUI');
   if (ui) {
@@ -662,15 +667,17 @@ function beginRaceIntro() {
     t: 0,
     phase: 'preview',
     center,
-    radius: span * 0.72,
-    height: Math.max(70, span * 0.28),
+    // Lower, closer sweep so the track fills the frame instead of empty sky
+    radius: span * 0.52,
+    height: Math.max(26, span * 0.095),
     angle: Math.atan2(window.kart.pos.x - center.x, window.kart.pos.z - center.z) + 0.6,
     startPos: start.pos.clone(),
     startHeading: start.heading,
     previewDur: 4.0,
     lineupDur: 1.7,
     povDur: 1.35,
-    snap: true
+    snap: true,
+    baseFov: null
   };
 }
 
@@ -705,24 +712,44 @@ function updateRaceIntro(dt) {
 function raceIntroCamera(camera, camTargetPos, camTargetLook) {
   const ri = window.raceIntro;
   if (!ri) return false;
+  window._raceCam = camera;
+
+  if (ri.baseFov == null) ri.baseFov = camera.fov;
 
   let idealPos, idealLook;
   if (ri.phase === 'preview') {
+    // Orbit looking across the circuit — aim past the center so horizon sits mid-frame
     idealPos = new THREE.Vector3(
       ri.center.x + Math.sin(ri.angle) * ri.radius,
       ri.center.y + ri.height,
       ri.center.z + Math.cos(ri.angle) * ri.radius
     );
-    idealLook = new THREE.Vector3(ri.center.x, ri.center.y + 6, ri.center.z);
+    idealLook = new THREE.Vector3(
+      ri.center.x - Math.sin(ri.angle) * ri.radius * 0.25,
+      ri.center.y + ri.height * 0.35,
+      ri.center.z - Math.cos(ri.angle) * ri.radius * 0.25
+    );
+    if (camera.fov !== 70) {
+      camera.fov = 70;
+      camera.updateProjectionMatrix();
+    }
   } else if (ri.phase === 'lineup') {
     const fw = new THREE.Vector3(Math.sin(ri.startHeading), 0, Math.cos(ri.startHeading));
-    idealPos = ri.startPos.clone().add(fw.clone().multiplyScalar(-28)).add(new THREE.Vector3(0, 16, 0));
-    idealLook = ri.startPos.clone().add(fw.clone().multiplyScalar(18)).add(new THREE.Vector3(0, 1.5, 0));
+    idealPos = ri.startPos.clone().add(fw.clone().multiplyScalar(-22)).add(new THREE.Vector3(0, 10, 0));
+    idealLook = ri.startPos.clone().add(fw.clone().multiplyScalar(22)).add(new THREE.Vector3(0, 1.2, 0));
+    if (camera.fov !== ri.baseFov) {
+      camera.fov = ri.baseFov;
+      camera.updateProjectionMatrix();
+    }
   } else {
     const followPos = window.kart.pos.clone().add(new THREE.Vector3(0, window.kart.hopOffset, 0));
     const fw = new THREE.Vector3(Math.sin(window.kart.heading), 0, Math.cos(window.kart.heading));
     idealPos = followPos.clone().add(fw.clone().multiplyScalar(-4.5)).add(new THREE.Vector3(0, 4.2, 0));
     idealLook = followPos.clone().add(fw.clone().multiplyScalar(6)).add(new THREE.Vector3(0, 0.5, 0));
+    if (camera.fov !== ri.baseFov) {
+      camera.fov = ri.baseFov;
+      camera.updateProjectionMatrix();
+    }
   }
 
   if (ri.snap) {
