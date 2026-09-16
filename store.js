@@ -62,35 +62,44 @@ async function init() {
     console.log('[store] Using local JSON file (set DATABASE_URL for durable cloud storage)');
     return;
   }
-  const { Pool } = require('pg');
-  pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-    max: 3
-  });
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS maxikart_store (
-      id TEXT PRIMARY KEY,
-      data JSONB NOT NULL,
-      updated_at BIGINT NOT NULL
-    )
-  `);
-  const res = await pool.query('SELECT data FROM maxikart_store WHERE id = $1', ['main']);
-  if (res.rows[0] && res.rows[0].data) {
-    const raw = res.rows[0].data;
-    cache = {
-      users: raw.users && typeof raw.users === 'object' ? raw.users : {},
-      boards: raw.boards && typeof raw.boards === 'object' ? raw.boards : {},
-      updatedAt: raw.updatedAt || Date.now()
-    };
-  } else {
-    // Seed from local file if present (one-time migrate)
-    const fileData = loadFile();
-    cache = fileData;
-    await persistPostgres(true);
+  try {
+    const { Pool } = require('pg');
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
+      max: 3
+    });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS maxikart_store (
+        id TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        updated_at BIGINT NOT NULL
+      )
+    `);
+    const res = await pool.query('SELECT data FROM maxikart_store WHERE id = $1', ['main']);
+    if (res.rows[0] && res.rows[0].data) {
+      const raw = res.rows[0].data;
+      cache = {
+        users: raw.users && typeof raw.users === 'object' ? raw.users : {},
+        boards: raw.boards && typeof raw.boards === 'object' ? raw.boards : {},
+        updatedAt: raw.updatedAt || Date.now()
+      };
+    } else {
+      const fileData = loadFile();
+      cache = fileData;
+      await persistPostgres(true);
+    }
+    ready = true;
+    console.log('[store] Using Postgres (DATABASE_URL) — data survives deploys');
+  } catch (err) {
+    console.error('[store] Postgres unavailable, falling back to file:', err.message || err);
+    if (pool) {
+      try { await pool.end(); } catch (_e) {}
+      pool = null;
+    }
+    cache = loadFile();
+    ready = true;
   }
-  ready = true;
-  console.log('[store] Using Postgres (DATABASE_URL) — data survives deploys');
 }
 
 async function persistPostgres(force) {

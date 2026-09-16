@@ -428,13 +428,7 @@ io.on('connection', (socket) => {
 });
 
 async function boot() {
-  try {
-    await Store.init();
-  } catch (err) {
-    console.error('[store] init failed — falling back to file store:', err.message || err);
-    process.env.DATABASE_URL = '';
-    await Store.init();
-  }
+  await Store.init();
 
   server.listen(PORT, '0.0.0.0', () => {
     const lan = [];
