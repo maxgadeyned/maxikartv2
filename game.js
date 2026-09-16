@@ -58,7 +58,7 @@ let ghostData = [];
 // ---------- Map Registry ----------
 const MAPS = [
   { 
-    id: 'neon', name: 'NEON LABYRINTH', shortcuts: [0.33, 0.66],
+    id: 'neon', name: 'NEON LABYRINTH', shortcuts: [0.33, 0.66], accent: '#37e6c8',
     points: [
       new THREE.Vector3(0, 0, 280), new THREE.Vector3(220, 0, 250), new THREE.Vector3(280, 0, 80), new THREE.Vector3(120, 0, -20),      
       new THREE.Vector3(260, 0, -120), new THREE.Vector3(180, 0, -260), new THREE.Vector3(40, 0, -280), new THREE.Vector3(80, 0, -100),      
@@ -68,7 +68,7 @@ const MAPS = [
     ]
   },
   { 
-    id: 'tiburtina', name: 'TIBURTINA SPRINT',
+    id: 'tiburtina', name: 'TIBURTINA SPRINT', accent: '#f2c14e',
     points: [
       new THREE.Vector3(0, 0, 300), new THREE.Vector3(80, 0, 280), new THREE.Vector3(150, 0, 180),
       new THREE.Vector3(80, 0, 80), new THREE.Vector3(200, 0, 0), new THREE.Vector3(300, 0, 100),
@@ -81,7 +81,7 @@ const MAPS = [
     ]
   },
   {
-    id: 'knot', name: 'KNOT CIRCUIT', shortcuts: [0.55],
+    id: 'knot', name: 'KNOT CIRCUIT', shortcuts: [0.55], accent: '#e2413a',
     points: [
       new THREE.Vector3(50, 0, 50),
       new THREE.Vector3(50, 0, -50),     
@@ -116,7 +116,7 @@ const MAPS = [
     ]
   },
   {
-    id: 'ridge', name: 'RIDGE RUN',
+    id: 'ridge', name: 'RIDGE RUN', accent: '#78b4ff',
     points: [
       new THREE.Vector3(0, 0, 320), new THREE.Vector3(140, 0, 300), new THREE.Vector3(260, 8, 200),
       new THREE.Vector3(300, 20, 60), new THREE.Vector3(220, 35, -80), new THREE.Vector3(80, 42, -160),
@@ -129,6 +129,115 @@ const MAPS = [
 ];
 
 let activeMapIndex = 0;
+
+function sampleMapPath(map, segments) {
+  if (!map || !map.points || map.points.length < 2) return [];
+  if (typeof THREE !== 'undefined' && THREE.CatmullRomCurve3) {
+    const curve = new THREE.CatmullRomCurve3(map.points, true);
+    return curve.getPoints(segments || 120);
+  }
+  return map.points.slice();
+}
+
+function paintTrackPreview(canvas, map) {
+  if (!canvas || !map) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const accent = map.accent || '#37e6c8';
+  const pts = sampleMapPath(map, 140);
+  if (!pts.length) return;
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  pts.forEach(p => {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+  });
+  const tW = Math.max(40, maxX - minX);
+  const tH = Math.max(40, maxZ - minZ);
+  const pad = 36;
+  const scale = Math.min((w - pad * 2) / tW, (h - pad * 2) / tH);
+  const ox = w * 0.5 - (minX + tW * 0.5) * scale;
+  const oy = h * 0.46 - (minZ + tH * 0.5) * scale;
+  const project = (p) => ({ x: p.x * scale + ox, y: p.z * scale + oy });
+
+  ctx.clearRect(0, 0, w, h);
+  const bg = ctx.createLinearGradient(0, 0, w, h);
+  bg.addColorStop(0, '#12151b');
+  bg.addColorStop(1, '#08090c');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  const glow = ctx.createRadialGradient(w * 0.5, h * 0.42, 10, w * 0.5, h * 0.42, w * 0.55);
+  glow.addColorStop(0, accent + '33');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+
+  // soft terrain blobs
+  ctx.fillStyle = 'rgba(28, 51, 37, 0.35)';
+  for (let i = 0; i < 10; i++) {
+    const ang = (i / 10) * Math.PI * 2;
+    const rx = w * 0.5 + Math.cos(ang) * w * 0.28;
+    const ry = h * 0.45 + Math.sin(ang) * h * 0.22;
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, 18 + (i % 3) * 8, 10 + (i % 2) * 6, ang, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const drawn = pts.map(project);
+  const trackWidth = Math.max(10, Math.min(22, 14 * scale / 0.35));
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  drawn.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth = trackWidth + 6;
+  ctx.stroke();
+
+  ctx.strokeStyle = '#2a2d35';
+  ctx.lineWidth = trackWidth;
+  ctx.stroke();
+
+  ctx.strokeStyle = accent;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = Math.max(1.5, trackWidth * 0.14);
+  ctx.setLineDash([6, 8]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // start/finish marker
+  const a = drawn[0];
+  const b = drawn[Math.min(4, drawn.length - 1)];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const hw = trackWidth * 0.55;
+  ctx.strokeStyle = '#f2f0e9';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(a.x - nx * hw, a.y - ny * hw);
+  ctx.lineTo(a.x + nx * hw, a.y + ny * hw);
+  ctx.stroke();
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function paintAllTrackCardPreviews() {
+  document.querySelectorAll('.track-card').forEach(card => {
+    const idx = Number(card.dataset.map);
+    const canvas = card.querySelector('.track-card-preview');
+    if (!canvas || !MAPS[idx]) return;
+    paintTrackPreview(canvas, MAPS[idx]);
+  });
+}
 
 function syncMapDisplays() {
   const name = MAPS[activeMapIndex].name;
@@ -226,6 +335,7 @@ const setupGhost = document.getElementById('setup-ghost'); if (setupGhost) setup
 document.getElementById('setup-items').checked = settings.items;
 refreshKeybindUI();
 syncMapDisplays();
+paintAllTrackCardPreviews();
 refreshTTOptionsSummary();
 
 function saveConfig() { localStorage.setItem('kartSettings', JSON.stringify(settings)); }
@@ -332,7 +442,10 @@ let lapSplits = []; let lapTimer = 0;
 function navTo(targetId) { 
   document.querySelectorAll('.menu-overlay').forEach(el => el.classList.remove('active')); 
   document.getElementById(targetId).classList.add('active');
-  if (targetId === 'menu-tt-track') syncMapDisplays();
+  if (targetId === 'menu-tt-track') {
+    syncMapDisplays();
+    paintAllTrackCardPreviews();
+  }
   if (targetId === 'menu-tt-options') refreshTTOptionsSummary();
 }
 
