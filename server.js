@@ -14,24 +14,30 @@ const Auth = require('./auth');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-auth2';
+const BUILD = 'sio-db1';
 
 const app = express();
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(__dirname));
-app.get('/health', (_req, res) => res.json({ ok: true, build: BUILD }));
-app.get('/version', (_req, res) => res.json({
-  ok: true,
-  build: BUILD,
-  commit: process.env.RENDER_GIT_COMMIT || 'local'
-}));
-
 app.get('/api/config', (_req, res) => {
   res.json({
     ok: true,
-    build: BUILD
+    build: BUILD,
+    persistence: Store.persistenceMode()
   });
 });
+
+app.get('/health', (_req, res) => res.json({
+  ok: true,
+  build: BUILD,
+  persistence: Store.persistenceMode()
+}));
+app.get('/version', (_req, res) => res.json({
+  ok: true,
+  build: BUILD,
+  commit: process.env.RENDER_GIT_COMMIT || 'local',
+  persistence: Store.persistenceMode()
+}));
 
 function authedUser(req) {
   const token = Auth.readBearer(req);
@@ -421,16 +427,29 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => leave(socket, reason));
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  const lan = [];
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const n of list || []) {
-      if (n.family === 'IPv4' && !n.internal) lan.push(n.address);
-    }
+async function boot() {
+  try {
+    await Store.init();
+  } catch (err) {
+    console.error('[store] init failed — falling back to file store:', err.message || err);
+    process.env.DATABASE_URL = '';
+    await Store.init();
   }
-  console.log('');
-  console.log('  MAXIKART server on port', PORT, '(' + BUILD + ')');
-  console.log('  Local:  http://127.0.0.1:' + PORT);
-  if (lan[0]) console.log('  LAN:    http://' + lan[0] + ':' + PORT);
-  console.log('');
-});
+
+  server.listen(PORT, '0.0.0.0', () => {
+    const lan = [];
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const n of list || []) {
+        if (n.family === 'IPv4' && !n.internal) lan.push(n.address);
+      }
+    }
+    console.log('');
+    console.log('  MAXIKART server on port', PORT, '(' + BUILD + ')');
+    console.log('  Storage:', Store.persistenceMode());
+    console.log('  Local:  http://127.0.0.1:' + PORT);
+    if (lan[0]) console.log('  LAN:    http://' + lan[0] + ':' + PORT);
+    console.log('');
+  });
+}
+
+boot();

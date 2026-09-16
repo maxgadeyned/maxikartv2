@@ -1,16 +1,23 @@
-/* Persistent JSON store for accounts + global time-trial boards */
+/* Accounts + global boards.
+   - Local / no DB: JSON file under DATA_DIR (wiped on Render redeploy)
+   - With DATABASE_URL: Postgres (survives deploys) — Neon/Supabase free works
+*/
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const STORE_PATH = path.join(DATA_DIR, 'maxikart-store.json');
+const DATABASE_URL = process.env.DATABASE_URL || '';
 const LEADERBOARD_SIZE = 10;
 const ALLOWED_MAPS = new Set(['neon', 'tiburtina', 'knot', 'ridge']);
 const ALLOWED_LAPS = new Set([1, 3, 5]);
-
-/** Soft floor so blatant packet cheats don't top the board (seconds). */
 const MIN_TIME = { 1: 18, 3: 55, 5: 95 };
+
+let pool = null;
+let ready = false;
+let saveTimer = null;
+let saving = null;
 
 function emptyStore() {
   return { users: {}, boards: {}, updatedAt: Date.now() };
@@ -20,7 +27,7 @@ function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function load() {
+function loadFile() {
   try {
     ensureDir();
     if (!fs.existsSync(STORE_PATH)) return emptyStore();
@@ -34,14 +41,98 @@ function load() {
   }
 }
 
-let cache = load();
-
-function save() {
+function saveFile() {
   ensureDir();
   cache.updatedAt = Date.now();
   const tmp = STORE_PATH + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(cache, null, 2));
   fs.renameSync(tmp, STORE_PATH);
+}
+
+let cache = emptyStore();
+
+function persistenceMode() {
+  return pool ? 'postgres' : 'file';
+}
+
+async function init() {
+  if (!DATABASE_URL) {
+    cache = loadFile();
+    ready = true;
+    console.log('[store] Using local JSON file (set DATABASE_URL for durable cloud storage)');
+    return;
+  }
+  const { Pool } = require('pg');
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
+    max: 3
+  });
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS maxikart_store (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at BIGINT NOT NULL
+    )
+  `);
+  const res = await pool.query('SELECT data FROM maxikart_store WHERE id = $1', ['main']);
+  if (res.rows[0] && res.rows[0].data) {
+    const raw = res.rows[0].data;
+    cache = {
+      users: raw.users && typeof raw.users === 'object' ? raw.users : {},
+      boards: raw.boards && typeof raw.boards === 'object' ? raw.boards : {},
+      updatedAt: raw.updatedAt || Date.now()
+    };
+  } else {
+    // Seed from local file if present (one-time migrate)
+    const fileData = loadFile();
+    cache = fileData;
+    await persistPostgres(true);
+  }
+  ready = true;
+  console.log('[store] Using Postgres (DATABASE_URL) — data survives deploys');
+}
+
+async function persistPostgres(force) {
+  if (!pool) return;
+  cache.updatedAt = Date.now();
+  const payload = JSON.stringify({
+    users: cache.users,
+    boards: cache.boards,
+    updatedAt: cache.updatedAt
+  });
+  await pool.query(
+    `INSERT INTO maxikart_store (id, data, updated_at)
+     VALUES ('main', $1::jsonb, $2)
+     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
+    [payload, cache.updatedAt]
+  );
+}
+
+function save() {
+  cache.updatedAt = Date.now();
+  if (!pool) {
+    saveFile();
+    return;
+  }
+  // Debounce Postgres writes so rapid submits don't stampede
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    const job = persistPostgres().catch(err => {
+      console.error('[store] Postgres save failed:', err.message || err);
+    });
+    saving = job.finally(() => { if (saving === job) saving = null; });
+  }, 80);
+}
+
+async function flush() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (pool) await persistPostgres();
+  else saveFile();
 }
 
 function boardKey(mapId, laps) {
@@ -120,7 +211,6 @@ function loginUser(name, password) {
     throw err;
   }
   const pass = String(password || '');
-  // Password accounts
   if (user.passHash && user.passSalt) {
     if (hashSecret(pass, user.passSalt) !== user.passHash) {
       const err = new Error('bad-login');
@@ -129,7 +219,6 @@ function loginUser(name, password) {
     }
     return user;
   }
-  // Legacy PIN accounts (from earlier build)
   if (user.pinHash && user.pinSalt) {
     if (hashSecret(pass, user.pinSalt) !== user.pinHash) {
       const err = new Error('bad-login');
@@ -204,7 +293,6 @@ function submitTime(userId, mapId, laps, time) {
     userId: user.id
   };
 
-  // Keep best time per user on this board
   const existingIdx = board.findIndex(e => e.userId === user.id);
   if (existingIdx >= 0) {
     if (board[existingIdx].time <= entry.time) {
@@ -226,6 +314,10 @@ function submitTime(userId, mapId, laps, time) {
 }
 
 module.exports = {
+  init,
+  flush,
+  ready: () => ready,
+  persistenceMode,
   LEADERBOARD_SIZE,
   ALLOWED_MAPS,
   ALLOWED_LAPS,
