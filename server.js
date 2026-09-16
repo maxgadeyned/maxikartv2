@@ -126,7 +126,22 @@ function allReady(room) {
   return true;
 }
 
-const wss = new WebSocketServer({ server, path: '/ws' });
+// noServer + manual upgrade — more reliable behind Render / proxies
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  let pathname = '/';
+  try {
+    pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  } catch (e) {}
+  if (pathname === '/ws' || pathname === '/ws/') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 
 wss.on('connection', (ws) => {
   ws.mkId = null;
