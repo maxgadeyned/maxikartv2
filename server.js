@@ -7,11 +7,12 @@ const os = require('os');
 const express = require('express');
 const { Server } = require('socket.io');
 const { randomUUID } = require('crypto');
+const AC = require('./anticheat');
 
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-1';
+const BUILD = 'sio-ac1';
 
 const app = express();
 app.use(express.static(__dirname));
@@ -129,12 +130,29 @@ function allReady(room) {
   return true;
 }
 
+function kickCheater(socket, reason) {
+  console.log('kick', socket.id, reason);
+  emit(socket, { t: 'reject', reason: 'Anticheat: illegal movement (' + reason + ')' });
+  leave(socket, 'anticheat:' + reason);
+  try { socket.disconnect(true); } catch (e) {}
+}
+
 io.on('connection', (socket) => {
   socket.data.mkCode = null;
+  socket.data.ac = AC.createTracker();
   console.log('connect', socket.id, socket.conn.transport.name);
 
   socket.on('msg', (msg) => {
-    if (!msg || !msg.t) return;
+    if (!msg || typeof msg !== 'object' || !msg.t) return;
+    if (typeof msg.t !== 'string' || msg.t.length > 24) return;
+
+    const now = Date.now();
+    if (!AC.rateOk(socket.data.ac, now)) {
+      if (socket.data.ac.strikes >= AC.MAX_STRIKES) {
+        kickCheater(socket, 'flood');
+      }
+      return;
+    }
 
     if (msg.t === 'ping') {
       emit(socket, { t: 'pong', n: msg.n });
@@ -143,7 +161,7 @@ io.on('connection', (socket) => {
 
     if (msg.t === 'create') {
       if (socket.data.mkCode) leave(socket, 'recreate');
-      const name = String(msg.name || 'RACER').toUpperCase().slice(0, 12) || 'RACER';
+      const name = AC.sanitizeName(msg.name);
       const code = makeCode();
       /** @type {Room} */
       const room = {
@@ -158,6 +176,7 @@ io.on('connection', (socket) => {
       });
       rooms.set(code, room);
       socket.data.mkCode = code;
+      socket.data.ac = AC.createTracker();
       socket.join(code);
       console.log('create', code, socket.id);
       emit(socket, {
@@ -192,11 +211,12 @@ io.on('connection', (socket) => {
         emit(socket, { t: 'reject', reason: 'Room full' });
         return;
       }
-      const name = String(msg.name || 'RACER').toUpperCase().slice(0, 12) || 'RACER';
+      const name = AC.sanitizeName(msg.name);
       room.players.set(socket.id, {
         id: socket.id, name, slot, host: false, ready: false
       });
       socket.data.mkCode = code;
+      socket.data.ac = AC.createTracker();
       socket.join(code);
       console.log('join', code, socket.id);
       emit(socket, {
@@ -223,20 +243,15 @@ io.on('connection', (socket) => {
     }
 
     if (msg.t === 'rename') {
-      me.name = String(msg.name || 'RACER').toUpperCase().slice(0, 12) || 'RACER';
+      me.name = AC.sanitizeName(msg.name);
       pushRoster(room);
       return;
     }
 
     if (msg.t === 'settings') {
       if (socket.id !== room.hostId) return;
-      room.settings = {
-        map: msg.map | 0,
-        laps: (msg.laps | 0) || 3,
-        night: !!msg.night,
-        weather: msg.weather || 'clear',
-        items: msg.items !== false
-      };
+      if (room.racing) return;
+      room.settings = AC.sanitizeSettings(msg);
       broadcast(room, { t: 'settings', ...room.settings });
       return;
     }
@@ -249,6 +264,11 @@ io.on('connection', (socket) => {
       }
       room.racing = true;
       room.players.forEach(p => { p.ready = false; });
+      // Reset anticheat trackers for all racers
+      room.players.forEach((_p, id) => {
+        const s = io.sockets.sockets.get(id);
+        if (s && s.data.ac) AC.onRaceStart(s.data.ac);
+      });
       broadcast(room, {
         t: 'start',
         map: room.settings.map,
@@ -264,19 +284,35 @@ io.on('connection', (socket) => {
     if (msg.t === 'lobby') {
       room.racing = false;
       room.players.forEach(p => { p.ready = false; });
+      room.players.forEach((_p, id) => {
+        const s = io.sockets.sockets.get(id);
+        if (s && s.data.ac) AC.onLobby(s.data.ac);
+      });
       broadcast(room, { t: 'lobby', settings: room.settings, players: roster(room) });
       return;
     }
 
     if (msg.t === 's') {
-      broadcast(room, Object.assign({}, msg, { id: socket.id, name: me.name }), socket.id);
+      const result = AC.validateState(msg, socket.data.ac, room);
+      if (!result.ok) {
+        if (result.kick) kickCheater(socket, result.reason);
+        return;
+      }
+      // Server stamps identity — client cannot spoof id/name
+      broadcast(room, Object.assign({}, result.packet, {
+        id: socket.id,
+        name: me.name
+      }), socket.id);
       return;
     }
 
     if (msg.t === 'bye') {
       leave(socket, 'bye');
       socket.disconnect(true);
+      return;
     }
+
+    // Unknown packet types are ignored (modified clients can't invent commands)
   });
 
   socket.on('disconnect', (reason) => leave(socket, reason));
