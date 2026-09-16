@@ -269,181 +269,221 @@
 </div>
 
 <!-- ============ DAILY REWARDS ============ -->
-<div id="menu-daily" class="menu-overlay">
-  <div class="menu-title small">DAILY REWARDS</div>
-  <div id="dailyStreak" class="daily-streak">Streak: 0 days</div>
-  <div class="daily-card">
-    <div class="daily-card-title">Login Bonus</div>
-    <div id="dailyLoginStatus" class="daily-status">Ready to claim</div>
-    <button class="menu-btn" id="dailyLoginBtn" onclick="playUIChime(); Economy.claimDailyLogin()">Claim Daily Login</button>
+<div id="menu-daily" class="menu-overlay menu-fit">
+  <div class="menu-fit-shell">
+    <div class="menu-title small">DAILY REWARDS</div>
+    <div class="menu-fit-body">
+      <div id="dailyStreak" class="daily-streak">Streak: 0 days</div>
+      <div class="daily-card">
+        <div class="daily-card-title">Login Bonus</div>
+        <div id="dailyLoginStatus" class="daily-status">Ready to claim</div>
+        <button class="menu-btn" id="dailyLoginBtn" onclick="playUIChime(); Economy.claimDailyLogin()">Claim Daily Login</button>
+      </div>
+      <div class="daily-card">
+        <div class="daily-card-title">Daily Challenge</div>
+        <div id="dailyChallengeText" class="daily-challenge">Finish any Time Trial</div>
+        <div id="dailyChallengeStatus" class="daily-status">In progress</div>
+      </div>
+    </div>
+    <div class="menu-fit-actions">
+      <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+    </div>
   </div>
-  <div class="daily-card">
-    <div class="daily-card-title">Daily Challenge</div>
-    <div id="dailyChallengeText" class="daily-challenge">Finish any Time Trial</div>
-    <div id="dailyChallengeStatus" class="daily-status">In progress</div>
-  </div>
-  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
 </div>
 
 <!-- ============ ACCOUNT ============ -->
-<div id="menu-account" class="menu-overlay">
-  <div class="menu-title small">ACCOUNT</div>
-  <p id="accountStatus" class="account-status">Playing as guest — scores stay on this device until you sign in</p>
+<div id="menu-account" class="menu-overlay menu-fit">
+  <div class="menu-fit-shell">
+    <div class="menu-title small">ACCOUNT</div>
+    <p id="accountStatus" class="account-status">Playing as guest — scores stay on this device until you sign in</p>
 
-  <div class="account-panel" id="accountSignedPanel" style="display:none;">
-    <div class="settings-grid single-col">
-      <div class="setting-row full">
-        <span class="setting-label">Racer Name</span>
-        <input type="text" id="accountNameInput" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+    <div class="menu-fit-body">
+      <div class="account-panel" id="accountSignedPanel" style="display:none;">
+        <div class="account-form">
+          <label class="account-field">
+            <span>Racer Name</span>
+            <input type="text" id="accountNameInput" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+          </label>
+        </div>
+        <p class="account-hint">Used in multiplayer and on the global leaderboard.</p>
+        <button class="menu-btn" onclick="playUIChime(); Account.saveDisplayName()"><span class="btn-ico">💾</span>Save Name</button>
+        <button class="menu-btn alt" onclick="Account.signOut()"><span class="btn-ico">🚪</span>Sign Out</button>
+      </div>
+
+      <div class="account-panel" id="accountGuestPanel">
+        <div class="account-tabs" role="tablist">
+          <button type="button" class="account-tab active" data-tab="guest" onclick="Account.showTab('guest')">Guest</button>
+          <button type="button" class="account-tab" data-tab="create" onclick="Account.showTab('create')">Create</button>
+          <button type="button" class="account-tab" data-tab="login" onclick="Account.showTab('login')">Log In</button>
+        </div>
+
+        <div class="account-tab-panel active" id="accountTabGuest">
+          <div class="account-form">
+            <label class="account-field">
+              <span>Guest Name</span>
+              <input type="text" id="accountNameInputGuest" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;"
+                onchange="Account.applyNameLocally(this.value); Account.syncNameInputs();">
+            </label>
+          </div>
+          <p class="account-hint">Play without an account. Create one to post global times and keep your name.</p>
+          <button class="menu-btn" onclick="Account.continueAsGuest()">Continue as Guest ▸</button>
+        </div>
+
+        <div class="account-tab-panel" id="accountTabCreate">
+          <div class="account-form">
+            <label class="account-field">
+              <span>Username</span>
+              <input type="text" id="accountRegName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+            </label>
+            <label class="account-field">
+              <span>Password</span>
+              <input type="password" id="accountRegPass" class="room-code-input" maxlength="64" placeholder="4+ characters" autocomplete="new-password">
+            </label>
+          </div>
+          <button class="menu-btn" onclick="Account.register()"><span class="btn-ico">✨</span>Create Account</button>
+        </div>
+
+        <div class="account-tab-panel" id="accountTabLogin">
+          <div class="account-form">
+            <label class="account-field">
+              <span>Username</span>
+              <input type="text" id="accountLoginName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;" autocomplete="username">
+            </label>
+            <label class="account-field">
+              <span>Password</span>
+              <input type="password" id="accountLoginPass" class="room-code-input" maxlength="64" placeholder="Password" autocomplete="current-password">
+            </label>
+          </div>
+          <button class="menu-btn alt" onclick="Account.login()"><span class="btn-ico">🔑</span>Log In</button>
+        </div>
       </div>
     </div>
-    <p class="account-hint">This name is used in multiplayer lobbies and on the global leaderboard.</p>
-    <button class="menu-btn" onclick="playUIChime(); Account.saveDisplayName()"><span class="btn-ico">💾</span>Save Name</button>
-    <button class="menu-btn alt" onclick="Account.signOut()"><span class="btn-ico">🚪</span>Sign Out</button>
+
+    <div class="menu-fit-actions">
+      <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+    </div>
   </div>
-
-  <div class="account-panel" id="accountGuestPanel">
-    <div class="settings-grid single-col">
-      <div class="setting-row full">
-        <span class="setting-label">Guest Name</span>
-        <input type="text" id="accountNameInputGuest" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;"
-          onchange="Account.applyNameLocally(this.value); Account.syncNameInputs();">
-      </div>
-    </div>
-    <p class="account-hint">Play freely as a guest. Create an account to save times on the global leaderboard and keep your name.</p>
-
-    <div class="account-divider">Create account</div>
-    <div class="settings-grid single-col">
-      <div class="setting-row full">
-        <span class="setting-label">Username</span>
-        <input type="text" id="accountRegName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
-      </div>
-      <div class="setting-row full">
-        <span class="setting-label">Password</span>
-        <input type="password" id="accountRegPass" class="room-code-input" maxlength="64" placeholder="4+ characters" autocomplete="new-password">
-      </div>
-    </div>
-    <button class="menu-btn" onclick="Account.register()"><span class="btn-ico">✨</span>Create Account</button>
-
-    <div class="account-divider">Log in</div>
-    <div class="settings-grid single-col">
-      <div class="setting-row full">
-        <span class="setting-label">Username</span>
-        <input type="text" id="accountLoginName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;" autocomplete="username">
-      </div>
-      <div class="setting-row full">
-        <span class="setting-label">Password</span>
-        <input type="password" id="accountLoginPass" class="room-code-input" maxlength="64" placeholder="Password" autocomplete="current-password">
-      </div>
-    </div>
-    <button class="menu-btn alt" onclick="Account.login()"><span class="btn-ico">🔑</span>Log In</button>
-    <button class="menu-btn ghost" onclick="Account.continueAsGuest()">Continue as Guest ▸</button>
-  </div>
-
-  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
 </div>
 
 <!-- ============ LEADERBOARDS ============ -->
-<div id="menu-leaderboard" class="menu-overlay">
-  <div class="menu-title small">LEADERBOARDS</div>
-  <p class="account-hint">Global top 10 time trials. Sign in on Account to upload your times.</p>
-  <div class="settings-grid single-col">
-    <div class="setting-row full">
-      <span class="setting-label">Track</span>
-      <div class="map-selector">
-        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleMap(-1)">◀</button>
-        <div class="map-name" id="lbMapDisplay">NEON LABYRINTH</div>
-        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleMap(1)">▶</button>
+<div id="menu-leaderboard" class="menu-overlay menu-fit">
+  <div class="menu-fit-shell menu-fit-shell-wide">
+    <div class="menu-title small">LEADERBOARDS</div>
+    <p class="account-hint">Global top 10. Sign in on Account to upload times.</p>
+    <div class="menu-fit-body">
+      <div class="account-form lb-controls">
+        <div class="setting-row full">
+          <span class="setting-label">Track</span>
+          <div class="map-selector">
+            <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleMap(-1)">◀</button>
+            <div class="map-name" id="lbMapDisplay">NEON LABYRINTH</div>
+            <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleMap(1)">▶</button>
+          </div>
+        </div>
+        <div class="setting-row full">
+          <span class="setting-label">Laps</span>
+          <div class="map-selector">
+            <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleLaps(-1)">◀</button>
+            <div class="map-name" id="lbLapDisplay">3 LAPS</div>
+            <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleLaps(1)">▶</button>
+          </div>
+        </div>
       </div>
+      <div id="lbScopeNote" class="lb-scope">GLOBAL</div>
+      <div id="lbList" class="lb-list"></div>
     </div>
-    <div class="setting-row full">
-      <span class="setting-label">Laps</span>
-      <div class="map-selector">
-        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleLaps(-1)">◀</button>
-        <div class="map-name" id="lbLapDisplay">3 LAPS</div>
-        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleLaps(1)">▶</button>
-      </div>
+    <div class="menu-fit-actions">
+      <button class="menu-btn alt" onclick="playUIChime(); Leaderboards.render()"><span class="btn-ico">↻</span>Refresh</button>
+      <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
     </div>
   </div>
-  <div id="lbScopeNote" class="lb-scope">GLOBAL</div>
-  <div id="lbList" class="lb-list"></div>
-  <button class="menu-btn alt" onclick="playUIChime(); Leaderboards.render()"><span class="btn-ico">↻</span>Refresh</button>
-  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
 </div>
 
 <!-- ============ LOOT BOX ============ -->
-<div id="menu-loot" class="menu-overlay">
-  <div class="menu-title small">LOOT BOX</div>
-  <div class="loot-coin-badge">🪙 <span class="coin-value">0</span></div>
-  <div id="pityCounter" class="pity-counter">Pity: 0/10</div>
-  <div class="loot-box-stage">
-    <div class="loot-box-icon" id="lootBoxIcon">📦</div>
-    <div class="loot-reveal" id="lootReveal">
-      <div class="reveal-rarity" id="revealRarity"></div>
-      <div class="reveal-swatch" id="revealSwatch"></div>
-      <div class="reveal-name" id="revealName"></div>
-      <div class="reveal-dupe" id="revealDupe"></div>
+<div id="menu-loot" class="menu-overlay menu-fit">
+  <div class="menu-fit-shell">
+    <div class="menu-title small">LOOT BOX</div>
+    <div class="menu-fit-body">
+      <div class="loot-coin-badge">🪙 <span class="coin-value">0</span></div>
+      <div id="pityCounter" class="pity-counter">Pity: 0/10</div>
+      <div class="loot-box-stage">
+        <div class="loot-box-icon" id="lootBoxIcon">📦</div>
+        <div class="loot-reveal" id="lootReveal">
+          <div class="reveal-rarity" id="revealRarity"></div>
+          <div class="reveal-swatch" id="revealSwatch"></div>
+          <div class="reveal-name" id="revealName"></div>
+          <div class="reveal-dupe" id="revealDupe"></div>
+        </div>
+      </div>
+      <div class="loot-odds">Common 38% · Uncommon 24% · Rare 18% · Epic 12% · Legendary 6% · Mythic 2%<br>Guaranteed Rare+ every 10 opens · Prefer fills missing categories · New Accent slot</div>
+    </div>
+    <div class="menu-fit-actions">
+      <button class="menu-btn" id="lootOpenBtn" onclick="playUIChime(); Economy.openBoxUI()">Open Loot Box — <span id="lootBoxPrice">150</span> 🪙</button>
+      <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
     </div>
   </div>
-  <div class="loot-odds">Common 38% · Uncommon 24% · Rare 18% · Epic 12% · Legendary 6% · Mythic 2%<br>Guaranteed Rare+ every 10 opens · Prefer fills missing categories · New Accent slot</div>
-  <button class="menu-btn" id="lootOpenBtn" onclick="playUIChime(); Economy.openBoxUI()">Open Loot Box — <span id="lootBoxPrice">150</span> 🪙</button>
-  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
 </div>
 
 <!-- ============ SETTINGS ============ -->
-<div id="menu-settings" class="menu-overlay">
-  <div class="menu-title small">SETTINGS</div>
-  <div id="bindWarningText"></div>
-  <div class="settings-grid">
-    <div class="setting-row"><span class="setting-label">Accelerate</span><div class="keybind-btn" id="bind-accel" onclick="listenForBind('accel')">W</div></div>
-    <div class="setting-row"><span class="setting-label">Brake / Rev</span><div class="keybind-btn" id="bind-brake" onclick="listenForBind('brake')">S</div></div>
-    <div class="setting-row"><span class="setting-label">Steer Left</span><div class="keybind-btn" id="bind-left" onclick="listenForBind('left')">A</div></div>
-    <div class="setting-row"><span class="setting-label">Steer Right</span><div class="keybind-btn" id="bind-right" onclick="listenForBind('right')">D</div></div>
-    <div class="setting-row"><span class="setting-label">Hop / Drift</span><div class="keybind-btn" id="bind-drift" onclick="listenForBind('drift')">SPACE</div></div>
-    <div class="setting-row"><span class="setting-label">Use Item</span><div class="keybind-btn" id="bind-item" onclick="listenForBind('item')">E</div></div>
-    <div class="setting-row"><span class="setting-label">Toggle Cam</span><div class="keybind-btn" id="bind-cam" onclick="listenForBind('cam')">F</div></div>
-    <div class="setting-row"><span class="setting-label">Look Behind</span><div class="keybind-btn" id="bind-rear" onclick="listenForBind('rear')">B</div></div>
-    <div class="setting-row"><span class="setting-label">Quick Restart</span><div class="keybind-btn" id="bind-restart" onclick="listenForBind('restart')">R</div></div>
-    <div class="setting-row">
-      <span class="setting-label">Master Sound</span>
-      <label class="switch"><input type="checkbox" id="toggle-sound" onchange="toggleSetting('sound', this.checked)"><span class="slider"></span></label>
-    </div>
-  </div>
+<div id="menu-settings" class="menu-overlay menu-fit">
+  <div class="menu-fit-shell menu-fit-shell-wide">
+    <div class="menu-title small">SETTINGS</div>
+    <div id="bindWarningText"></div>
+    <div class="menu-fit-body">
+      <div class="settings-grid">
+        <div class="setting-row"><span class="setting-label">Accelerate</span><div class="keybind-btn" id="bind-accel" onclick="listenForBind('accel')">W</div></div>
+        <div class="setting-row"><span class="setting-label">Brake / Rev</span><div class="keybind-btn" id="bind-brake" onclick="listenForBind('brake')">S</div></div>
+        <div class="setting-row"><span class="setting-label">Steer Left</span><div class="keybind-btn" id="bind-left" onclick="listenForBind('left')">A</div></div>
+        <div class="setting-row"><span class="setting-label">Steer Right</span><div class="keybind-btn" id="bind-right" onclick="listenForBind('right')">D</div></div>
+        <div class="setting-row"><span class="setting-label">Hop / Drift</span><div class="keybind-btn" id="bind-drift" onclick="listenForBind('drift')">SPACE</div></div>
+        <div class="setting-row"><span class="setting-label">Use Item</span><div class="keybind-btn" id="bind-item" onclick="listenForBind('item')">E</div></div>
+        <div class="setting-row"><span class="setting-label">Toggle Cam</span><div class="keybind-btn" id="bind-cam" onclick="listenForBind('cam')">F</div></div>
+        <div class="setting-row"><span class="setting-label">Look Behind</span><div class="keybind-btn" id="bind-rear" onclick="listenForBind('rear')">B</div></div>
+        <div class="setting-row"><span class="setting-label">Quick Restart</span><div class="keybind-btn" id="bind-restart" onclick="listenForBind('restart')">R</div></div>
+        <div class="setting-row">
+          <span class="setting-label">Master Sound</span>
+          <label class="switch"><input type="checkbox" id="toggle-sound" onchange="toggleSetting('sound', this.checked)"><span class="slider"></span></label>
+        </div>
+      </div>
 
-  <div class="settings-section-label">Sound Volumes</div>
-  <div class="settings-grid volume-grid">
-    <div class="setting-row full vol-row">
-      <span class="setting-label">Master</span>
-      <input type="range" class="vol-slider" id="vol-master" min="0" max="100" value="100" oninput="setVolume('master', this.value)">
-      <span class="vol-pct" id="vol-master-pct">100%</span>
+      <div class="settings-section-label">Sound Volumes</div>
+      <div class="settings-grid volume-grid">
+        <div class="setting-row full vol-row">
+          <span class="setting-label">Master</span>
+          <input type="range" class="vol-slider" id="vol-master" min="0" max="100" value="100" oninput="setVolume('master', this.value)">
+          <span class="vol-pct" id="vol-master-pct">100%</span>
+        </div>
+        <div class="setting-row full vol-row">
+          <span class="setting-label">Engine</span>
+          <input type="range" class="vol-slider" id="vol-engine" min="0" max="100" value="100" oninput="setVolume('engine', this.value)">
+          <span class="vol-pct" id="vol-engine-pct">100%</span>
+        </div>
+        <div class="setting-row full vol-row">
+          <span class="setting-label">Skids / Drift</span>
+          <input type="range" class="vol-slider" id="vol-skid" min="0" max="100" value="100" oninput="setVolume('skid', this.value)">
+          <span class="vol-pct" id="vol-skid-pct">100%</span>
+        </div>
+        <div class="setting-row full vol-row">
+          <span class="setting-label">UI / Menus</span>
+          <input type="range" class="vol-slider" id="vol-ui" min="0" max="100" value="100" oninput="setVolume('ui', this.value)">
+          <span class="vol-pct" id="vol-ui-pct">100%</span>
+        </div>
+        <div class="setting-row full vol-row">
+          <span class="setting-label">Race SFX</span>
+          <input type="range" class="vol-slider" id="vol-sfx" min="0" max="100" value="100" oninput="setVolume('sfx', this.value)">
+          <span class="vol-pct" id="vol-sfx-pct">100%</span>
+        </div>
+        <div class="setting-row full vol-row">
+          <span class="setting-label">Crowd / Ambience</span>
+          <input type="range" class="vol-slider" id="vol-ambience" min="0" max="100" value="100" oninput="setVolume('ambience', this.value)">
+          <span class="vol-pct" id="vol-ambience-pct">100%</span>
+        </div>
+      </div>
     </div>
-    <div class="setting-row full vol-row">
-      <span class="setting-label">Engine</span>
-      <input type="range" class="vol-slider" id="vol-engine" min="0" max="100" value="100" oninput="setVolume('engine', this.value)">
-      <span class="vol-pct" id="vol-engine-pct">100%</span>
-    </div>
-    <div class="setting-row full vol-row">
-      <span class="setting-label">Skids / Drift</span>
-      <input type="range" class="vol-slider" id="vol-skid" min="0" max="100" value="100" oninput="setVolume('skid', this.value)">
-      <span class="vol-pct" id="vol-skid-pct">100%</span>
-    </div>
-    <div class="setting-row full vol-row">
-      <span class="setting-label">UI / Menus</span>
-      <input type="range" class="vol-slider" id="vol-ui" min="0" max="100" value="100" oninput="setVolume('ui', this.value)">
-      <span class="vol-pct" id="vol-ui-pct">100%</span>
-    </div>
-    <div class="setting-row full vol-row">
-      <span class="setting-label">Race SFX</span>
-      <input type="range" class="vol-slider" id="vol-sfx" min="0" max="100" value="100" oninput="setVolume('sfx', this.value)">
-      <span class="vol-pct" id="vol-sfx-pct">100%</span>
-    </div>
-    <div class="setting-row full vol-row">
-      <span class="setting-label">Crowd / Ambience</span>
-      <input type="range" class="vol-slider" id="vol-ambience" min="0" max="100" value="100" oninput="setVolume('ambience', this.value)">
-      <span class="vol-pct" id="vol-ambience-pct">100%</span>
+    <div class="menu-fit-actions">
+      <button class="menu-btn ghost" onclick="playUIChime(); closeSettings()">Save &amp; Close</button>
     </div>
   </div>
-  <button class="menu-btn ghost" onclick="playUIChime(); closeSettings()">Save &amp; Close</button>
 </div>
 
 <!-- ============ PAUSE ============ -->

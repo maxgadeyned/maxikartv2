@@ -175,6 +175,21 @@
     if (window.playUIChime) playUIChime();
   }
 
+  function showTab(tab) {
+    const panels = {
+      guest: document.getElementById('accountTabGuest'),
+      create: document.getElementById('accountTabCreate'),
+      login: document.getElementById('accountTabLogin')
+    };
+    Object.keys(panels).forEach(key => {
+      if (panels[key]) panels[key].classList.toggle('active', key === tab);
+    });
+    document.querySelectorAll('.account-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    if (window.playUIChime) playUIChime();
+  }
+
   function continueAsGuest() {
     if (window.playUIChime) playUIChime();
     if (typeof navTo === 'function') navTo('menu-main');
@@ -233,6 +248,7 @@
     refreshUI: refreshAccountUI,
     register,
     login,
+    showTab,
     saveDisplayName,
     signOut,
     continueAsGuest,
