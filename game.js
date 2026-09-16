@@ -353,7 +353,22 @@ function closeSettings() {
   if (gameState === 'paused') navTo('menu-pause'); else navTo('menu-main'); 
 }
 
-function restartRace() { startGame(gameMode); }
+function restartRace() {
+  if (gameMode === 'online') return;
+  startGame(gameMode);
+}
+
+function updateOnlineRestartUI() {
+  const online = gameMode === 'online';
+  ['pauseRestartBtn', 'finishRaceAgainBtn', 'resultsAgainBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = online ? 'none' : '';
+  });
+  const guide = document.getElementById('hudKeyGuide');
+  if (guide && online) {
+    guide.innerHTML = `ESC: PAUSE | ${formatKey(settings.keys.item)}: USE ITEM<br>${formatKey(settings.keys.cam)}: CAM | ${formatKey(settings.keys.rear)}: LOOK BACK`;
+  }
+}
 
 function startGame(mode) {
   if (document.activeElement) document.activeElement.blur();
@@ -471,6 +486,7 @@ function startGame(mode) {
   if (window.applyLightingMode) window.applyLightingMode(settings.night);
   const pauseMap = document.getElementById('pauseMapInfo');
   if (pauseMap) pauseMap.textContent = MAPS[activeMapIndex].name + ' · ' + maxLaps + ' LAP' + (maxLaps>1?'S':'');
+  updateOnlineRestartUI();
   if (mode === 'timed' || mode === 'multiplayer' || mode === 'online') { gameState = 'countdown'; startCountdown(); } else { gameState = 'playing'; }
 }
 
@@ -479,6 +495,7 @@ function pauseGame() {
   window._pausedFromSpectate = gameState === 'spectating';
   previousState = gameState;
   gameState = 'paused';
+  updateOnlineRestartUI();
   navTo('menu-pause');
   if (window.suspendGameAudio) window.suspendGameAudio();
 }
@@ -917,7 +934,11 @@ window.addEventListener('keydown', (e) => {
     cycleSpectate(keyMap === 'e' ? 1 : -1);
     return;
   }
-  if (keyMap === settings.keys.restart && (gameState === 'playing' || gameState === 'paused')) { restartRace(); return; }
+  if (keyMap === settings.keys.restart && (gameState === 'playing' || gameState === 'paused')) {
+    if (gameMode === 'online') return;
+    restartRace();
+    return;
+  }
   if (keyMap === settings.keys.cam) { window.cameraView = window.cameraView === 'fpv' ? 'chase' : 'fpv'; return; }
   if (keyMap === settings.keys.rear) { window.lookBehind = true; return; }
   if (keyMap === settings.keys.item && gameState === 'playing' && window.kart.item) {
