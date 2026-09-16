@@ -248,52 +248,205 @@
     return { item, rarity, alreadyOwned, dupeRefund, pity: forcePity };
   }
 
-  // ---------------- Reveal UI ----------------
+  // ---------------- Reveal UI (CS-style case roller) ----------------
+  const SLOT_LABELS = {
+    build: 'Chassis',
+    colour: 'Paint',
+    wheels: 'Wheels',
+    driver: 'Helmet',
+    accent: 'Accent'
+  };
+  const CASE_CARD_W = 108;
+  const CASE_GAP = 8;
+  const CASE_STEP = CASE_CARD_W + CASE_GAP;
+  const CASE_WIN_INDEX = 38;
+  const CASE_STRIP_LEN = 48;
+
   let revealBusy = false;
+  let caseTickTimer = 0;
+
+  function categoryLabel(cat) {
+    return SLOT_LABELS[cat] || String(cat || 'Item').toUpperCase();
+  }
+
+  function pickFillerItem(excludeId) {
+    const catalog = window.Cosmetics.ITEM_CATALOG;
+    let guard = 0;
+    while (guard++ < 40) {
+      const item = catalog[Math.floor(Math.random() * catalog.length)];
+      if (item && item.id !== excludeId) return item;
+    }
+    return catalog[0];
+  }
+
+  function buildCaseCard(item, isWinner) {
+    const rarity = window.Cosmetics.RARITY[item.rarity] || window.Cosmetics.RARITY.common;
+    const el = document.createElement('div');
+    el.className = 'case-card' + (isWinner ? ' winner' : '');
+    el.style.setProperty('--rarity-color', rarity.color);
+    el.innerHTML =
+      `<div class="case-card-cat">${categoryLabel(item.category)}</div>` +
+      `<div class="case-card-swatch" style="background:${swatchColorFor(item)}"></div>` +
+      `<div class="case-card-name">${item.name}</div>` +
+      `<div class="case-card-rarity">${rarity.label}</div>`;
+    return el;
+  }
+
+  function playCaseTick() {
+    const vol = window.audioVol ? window.audioVol('ui') : 0.4;
+    if (vol <= 0) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 880 + Math.random() * 220;
+      gain.gain.setValueAtTime(0.035 * vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.05);
+    } catch (e) {}
+  }
+
+  function resetCaseUI() {
+    clearTimeout(caseTickTimer);
+    caseTickTimer = 0;
+    const idle = document.getElementById('caseIdle');
+    const roller = document.getElementById('caseRoller');
+    const track = document.getElementById('caseTrack');
+    const reveal = document.getElementById('lootReveal');
+    const icon = document.getElementById('lootBoxIcon');
+    if (idle) idle.hidden = false;
+    if (roller) roller.hidden = true;
+    if (track) {
+      track.style.transition = 'none';
+      track.style.transform = 'translate3d(0,0,0)';
+      track.innerHTML = '';
+    }
+    if (reveal) reveal.className = 'loot-reveal';
+    if (icon) icon.classList.remove('shaking');
+  }
+
+  function showCaseResult(result) {
+    const reveal = document.getElementById('lootReveal');
+    if (!reveal) return;
+    if (window.playLootReveal) window.playLootReveal(result.rarity);
+
+    const rarity = window.Cosmetics.RARITY[result.rarity];
+    const slotEl = document.getElementById('revealSlot');
+    if (slotEl) slotEl.textContent = categoryLabel(result.item.category).toUpperCase();
+    document.getElementById('revealRarity').textContent = rarity.label + (result.pity ? ' (PITY)' : '');
+    document.getElementById('revealRarity').style.color = rarity.color;
+    document.getElementById('revealSwatch').style.background = swatchColorFor(result.item);
+    document.getElementById('revealSwatch').style.setProperty('--rarity-color', rarity.color);
+    document.getElementById('revealName').textContent = result.item.name;
+    document.getElementById('revealDupe').textContent = result.alreadyOwned
+      ? `Duplicate — converted to +${result.dupeRefund} coins`
+      : 'NEW ITEM UNLOCKED';
+    reveal.className = 'loot-reveal show rarity-' + result.rarity;
+  }
+
   function openBoxUI() {
     if (revealBusy) return;
     if (coins < LOOTBOX_COST) { flashInsufficientFunds(); return; }
 
-    const icon = document.getElementById('lootBoxIcon');
+    const idle = document.getElementById('caseIdle');
+    const roller = document.getElementById('caseRoller');
+    const track = document.getElementById('caseTrack');
     const reveal = document.getElementById('lootReveal');
+    const icon = document.getElementById('lootBoxIcon');
+    if (!track || !roller || !reveal) return;
+
     revealBusy = true;
     reveal.className = 'loot-reveal';
-    icon.classList.add('shaking');
+    if (icon) icon.classList.add('shaking');
+
+    const result = openLootBox();
+    if (!result) {
+      revealBusy = false;
+      if (icon) icon.classList.remove('shaking');
+      refreshCoinUI();
+      return;
+    }
+
+    const strip = [];
+    for (let i = 0; i < CASE_STRIP_LEN; i++) {
+      strip.push(i === CASE_WIN_INDEX ? result.item : pickFillerItem(result.item.id));
+    }
+    track.innerHTML = '';
+    strip.forEach((item, i) => track.appendChild(buildCaseCard(item, i === CASE_WIN_INDEX)));
 
     setTimeout(() => {
-      const result = openLootBox();
-      icon.classList.remove('shaking');
-      if (!result) { revealBusy = false; return; }
+      if (idle) idle.hidden = true;
+      roller.hidden = false;
+      if (icon) icon.classList.remove('shaking');
 
-      if (window.playLootReveal) window.playLootReveal(result.rarity);
+      const windowEl = roller.querySelector('.case-window');
+      const winW = (windowEl && windowEl.clientWidth) || roller.clientWidth || 560;
+      const jitter = (Math.random() - 0.5) * (CASE_CARD_W * 0.5);
+      const targetX = (winW / 2) - (CASE_WIN_INDEX * CASE_STEP + CASE_CARD_W / 2) - jitter;
+      const duration = 5200;
 
-      const rarity = window.Cosmetics.RARITY[result.rarity];
-      document.getElementById('revealRarity').textContent = rarity.label + (result.pity ? ' (PITY)' : '');
-      document.getElementById('revealRarity').style.color = rarity.color;
-      document.getElementById('revealSwatch').style.background = swatchColorFor(result.item);
-      document.getElementById('revealSwatch').style.setProperty('--rarity-color', rarity.color);
-      document.getElementById('revealName').textContent = result.item.name;
-      document.getElementById('revealDupe').textContent = result.alreadyOwned
-        ? `Duplicate — converted to +${result.dupeRefund} coins`
-        : 'NEW ITEM UNLOCKED';
+      track.style.transition = 'none';
+      track.style.transform = 'translate3d(0px,0,0)';
+      void track.offsetWidth;
 
-      icon.style.display = 'none';
-      reveal.className = 'loot-reveal show rarity-' + result.rarity;
+      // Slow tick while spinning
+      let tickDelay = 55;
+      clearTimeout(caseTickTimer);
+      const scheduleTick = () => {
+        caseTickTimer = setTimeout(() => {
+          playCaseTick();
+          tickDelay = Math.min(180, tickDelay + 8);
+          scheduleTick();
+        }, tickDelay);
+      };
+      scheduleTick();
 
+      requestAnimationFrame(() => {
+        track.style.transition = `transform ${duration}ms cubic-bezier(0.08, 0.7, 0.1, 1)`;
+        track.style.transform = `translate3d(${targetX}px,0,0)`;
+      });
+
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(caseTickTimer);
+        caseTickTimer = 0;
+        const finalX = (winW / 2) - (CASE_WIN_INDEX * CASE_STEP + CASE_CARD_W / 2);
+        track.style.transition = 'transform 180ms ease-out';
+        track.style.transform = `translate3d(${finalX}px,0,0)`;
+        showCaseResult(result);
+        setTimeout(() => {
+          resetCaseUI();
+          revealBusy = false;
+          refreshCoinUI();
+        }, 2800);
+      };
+
+      const onEnd = (e) => {
+        if (e && e.propertyName && e.propertyName !== 'transform') return;
+        if (e && e.target !== track) return;
+        track.removeEventListener('transitionend', onEnd);
+        finish();
+      };
+      track.addEventListener('transitionend', onEnd);
       setTimeout(() => {
-        icon.style.display = '';
-        reveal.className = 'loot-reveal';
-        revealBusy = false;
-      }, 2400);
-    }, 550);
+        track.removeEventListener('transitionend', onEnd);
+        finish();
+      }, duration + 450);
+    }, 380);
   }
 
   function swatchColorFor(item) {
-    const p = item.payload;
+    const p = item.payload || {};
     if (p.bodyColor) return p.bodyColor;
     if (p.wheelColor) return p.wheelColor;
     if (p.driverHelmet) return p.driverHelmet;
     if (p.accentColor) return p.accentColor;
+    if (item.category === 'build') return '#37e6c8';
     return '#2b2d33';
   }
 
@@ -445,6 +598,54 @@
   document.getElementById('lootBoxPrice').textContent = LOOTBOX_COST;
   refreshCoinUI();
   refreshDailyUI();
+
+  window.DevTools = {
+    isLocal() {
+      const h = (location.hostname || '').toLowerCase();
+      return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
+    },
+    /** Localhost, or signed-in account flagged by server (DEV_USERNAMES). */
+    isAllowed() {
+      if (this.isLocal()) return true;
+      const u = window.Account && Account.getUser && Account.getUser();
+      return !!(u && u.devTools);
+    },
+    refreshUI() {
+      const devSection = document.getElementById('devToolsSection');
+      if (devSection) devSection.style.display = this.isAllowed() ? '' : 'none';
+    },
+    unlockAll() {
+      if (!this.isAllowed()) {
+        const note = document.getElementById('devToolsNote');
+        if (note) note.textContent = 'Dev tools locked — localhost or whitelisted account only.';
+        return 0;
+      }
+      const n = window.Cosmetics && Cosmetics.unlockAllCosmetics
+        ? Cosmetics.unlockAllCosmetics()
+        : 0;
+      if (window.Garage && Garage.refresh) Garage.refresh();
+      const note = document.getElementById('devToolsNote');
+      if (note) note.textContent = n > 0
+        ? `Unlocked ${n} new cosmetics — check the Garage.`
+        : 'All cosmetics already unlocked.';
+      return n;
+    },
+    grantCoins(amount) {
+      if (!this.isAllowed()) {
+        const note = document.getElementById('devToolsNote');
+        if (note) note.textContent = 'Dev tools locked — localhost or whitelisted account only.';
+        return coins;
+      }
+      const n = Math.max(0, Math.round(Number(amount) || 0));
+      addCoins(n);
+      const note = document.getElementById('devToolsNote');
+      if (note) note.textContent = `Added ${n.toLocaleString()} coins. Balance: ${coins.toLocaleString()}`;
+      return coins;
+    }
+  };
+
+  window.DevTools.refreshUI();
+  document.addEventListener('account-updated', () => window.DevTools.refreshUI());
 
   // Refresh leaderboard / daily when menus open
   const lbMenu = document.getElementById('menu-leaderboard');

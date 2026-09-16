@@ -221,6 +221,7 @@
       chip.textContent = isSignedIn() ? Account.user.name : 'GUEST';
       chip.classList.toggle('signed', isSignedIn());
     }
+    try { document.dispatchEvent(new CustomEvent('account-updated')); } catch (_e) {}
   }
 
   async function fetchGlobalBoard(mapId, laps) {

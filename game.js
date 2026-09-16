@@ -635,6 +635,7 @@ function startGame(mode, opts) {
   window.kart.itemCount = 0;
   window.kart.shieldTimer = 0;
   window.kart.spinTimer = 0;
+  window.kart.stallTimer = 0;
   window.kart.finished = false;
   window.playerRacePlace = 1;
   window.replayBuffer = [];
@@ -958,23 +959,175 @@ function playCountdownBeep(count) {
   } catch(e) {}
 }
 
+function playStartBoostCue(kind) {
+  const vol = audioVol('sfx');
+  if (vol <= 0) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    if (kind === 'perfect') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.09 * vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+      osc.stop(ctx.currentTime + 0.3);
+    } else if (kind === 'early') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.35);
+      gain.gain.setValueAtTime(0.07 * vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.42);
+    } else {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(240, ctx.currentTime);
+      gain.gain.setValueAtTime(0.04 * vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.stop(ctx.currentTime + 0.22);
+    }
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+  } catch (e) {}
+}
+
+function showStartBoostFlash(text, kind) {
+  const el = document.getElementById('startBoostFlash');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'start-boost-flash' + (kind ? ' ' + kind : '');
+  void el.offsetWidth;
+  el.classList.add('show');
+  const ui = document.getElementById('countdownUI');
+  if (ui) {
+    ui.classList.remove('sb-perfect', 'sb-early', 'sb-miss');
+    void ui.offsetWidth;
+    if (kind) ui.classList.add('sb-' + kind);
+  }
+}
+
+function getCountdownRemaining() {
+  if (!window._countdownEndsAt) return 0;
+  return Math.max(0, (window._countdownEndsAt - performance.now()) / 1000);
+}
+
+function tryStartBoostTiming() {
+  if (gameState !== 'countdown') return;
+  const sb = window.startBoost;
+  if (!sb || sb.resolved) return;
+  const rem = getCountdownRemaining();
+  if (rem <= 0.05) return;
+  sb.resolved = true;
+  if (rem >= 1.0 && rem <= 1.75) {
+    sb.outcome = 'boost';
+    showStartBoostFlash('START BOOST!', 'perfect');
+    playStartBoostCue('perfect');
+  } else if (rem > 1.75) {
+    sb.outcome = 'stall';
+    showStartBoostFlash('TOO EARLY!', 'early');
+    playStartBoostCue('early');
+  } else {
+    sb.outcome = null;
+    showStartBoostFlash('LATE', 'miss');
+    playStartBoostCue('miss');
+  }
+}
+
+/** Edge-detect accel during countdown (covers hold-from-intro — keydown already fired). */
+function pollStartBoostInput() {
+  if (gameState !== 'countdown') {
+    window._sbAccelLatch = false;
+    return;
+  }
+  const down = !!(inputState && inputState.accel);
+  if (down && !window._sbAccelLatch) {
+    window._sbAccelLatch = true;
+    tryStartBoostTiming();
+  } else if (!down) {
+    window._sbAccelLatch = false;
+  }
+}
+
+function isAccelEvent(e) {
+  const keyMap = (e.key || '').toLowerCase();
+  if (keyMap && keyMap === settings.keys.accel) return true;
+  // Fallback for layout / browser quirks
+  const code = e.code || '';
+  const accel = settings.keys.accel;
+  if (accel === 'w' && code === 'KeyW') return true;
+  if (accel === 'arrowup' && code === 'ArrowUp') return true;
+  if (accel === ' ' && (code === 'Space' || keyMap === ' ')) return true;
+  return false;
+}
+
+function applyStartBoostOnGo() {
+  const sb = window.startBoost;
+  if (!sb || !window.kart) return;
+  if (sb.outcome === 'boost') {
+    window.kart.lastDriftTier = 1;
+    window.kart.boostDuration = 0.65;
+    window.kart.boostTimer = 0.65;
+    window.kart.speedForward = Math.max(window.kart.speedForward, 12);
+    window.kart.speedForward = Math.min(window.kart.maxSpeed + 4, window.kart.speedForward + 6);
+    window.cameraShakeTimer = 0.22;
+    if (window.playBoostWhoosh) window.playBoostWhoosh();
+  } else if (sb.outcome === 'stall') {
+    window.kart.stallTimer = 1.05;
+    window.kart.speedForward = 0;
+    if (window.kart.velocity) window.kart.velocity.set(0, 0, 0);
+    window.cameraShakeTimer = 0.35;
+  }
+  window.startBoost = null;
+}
+
 function startCountdown() {
   clearRaceIntro();
-  const ui = document.getElementById('countdownUI'); const txt = document.getElementById('countdownText');
-  ui.style.display = 'flex'; let count = 3; txt.innerText = count; txt.style.color = 'var(--ember)';
+  const ui = document.getElementById('countdownUI');
+  const txt = document.getElementById('countdownText');
+  const flash = document.getElementById('startBoostFlash');
+  const hint = document.getElementById('startBoostHint');
+  if (flash) { flash.className = 'start-boost-flash'; flash.textContent = ''; }
+  if (hint) hint.style.opacity = '1';
+  ui.classList.remove('sb-perfect', 'sb-early', 'sb-miss');
+  ui.style.display = 'flex';
+  let count = 3;
+  txt.innerText = count;
+  txt.style.color = 'var(--ember)';
+  window._countdownEndsAt = performance.now() + 3000;
+  window.startBoost = { resolved: false, outcome: null };
+  // If already holding accel from intro/menu, treat as a fresh press at countdown start
+  window._sbAccelLatch = false;
   playCountdownBeep(count);
   const timer = setInterval(() => {
-    if(gameState === 'paused' || gameState === 'menu' || gameState === 'intro') { clearInterval(timer); ui.style.display = 'none'; return; }
+    if (gameState === 'paused' || gameState === 'menu' || gameState === 'intro') {
+      clearInterval(timer);
+      ui.style.display = 'none';
+      window.startBoost = null;
+      return;
+    }
     count--;
-    if (count > 0) { 
-      txt.innerText = count; txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = 'pop 1s ease-out infinite'; 
+    if (count > 0) {
+      txt.innerText = count;
+      txt.style.animation = 'none';
+      void txt.offsetWidth;
+      txt.style.animation = 'pop 1s ease-out infinite';
       playCountdownBeep(count);
-    } 
-    else if (count === 0) { 
-      txt.innerText = 'GO!'; txt.style.color = 'var(--teal)'; gameState = 'playing'; 
+    } else if (count === 0) {
+      txt.innerText = 'GO!';
+      txt.style.color = 'var(--teal)';
+      if (hint) hint.style.opacity = '0';
+      applyStartBoostOnGo();
+      gameState = 'playing';
       playCountdownBeep(count);
-    } 
-    else { clearInterval(timer); ui.style.display = 'none'; txt.style.color = 'var(--ember)'; }
+    } else {
+      clearInterval(timer);
+      ui.style.display = 'none';
+      ui.classList.remove('sb-perfect', 'sb-early', 'sb-miss');
+      txt.style.color = 'var(--ember)';
+      if (flash) { flash.className = 'start-boost-flash'; flash.textContent = ''; }
+      if (hint) hint.style.opacity = '0';
+    }
   }, 1000);
 }
 
@@ -1368,7 +1521,10 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (gameState !== 'playing' && gameState !== 'countdown') return;
-  if (keyMap === settings.keys.accel) inputState.accel = true; 
+  if (isAccelEvent(e)) {
+    inputState.accel = true;
+    if (gameState === 'countdown' && !e.repeat) tryStartBoostTiming();
+  }
   if (keyMap === settings.keys.brake) inputState.brake = true;
   if (keyMap === settings.keys.left) inputState.left = true; 
   if (keyMap === settings.keys.right) inputState.right = true;
@@ -1378,7 +1534,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   const keyMap = e.key.toLowerCase();
   if (keyMap === settings.keys.rear) { window.lookBehind = false; return; }
-  if (keyMap === settings.keys.accel) inputState.accel = false; 
+  if (isAccelEvent(e) || keyMap === settings.keys.accel) inputState.accel = false; 
   if (keyMap === settings.keys.brake) inputState.brake = false;
   if (keyMap === settings.keys.left) inputState.left = false; 
   if (keyMap === settings.keys.right) inputState.right = false;
@@ -2673,21 +2829,26 @@ window.addEventListener('keyup', (e) => {
     gripLateral: 14, driftGripLateral: 3.0, hopImpulse: 5.5, gravity: -18,
     minDriftTimeForBoost: 0.35, boostDuration: 1.0, boostTopSpeedBonus: 9, boostKick: 9,
     driftTier: 1, lastDriftTier: 1, item: null,
-    shieldTimer: 0, spinTimer: 0, finished: false, finishTime: null
+    shieldTimer: 0, spinTimer: 0, stallTimer: 0, finished: false, finishTime: null
   };
   let spaceWasDown = false;
 
   function updateKart(dt) {
     window.kart.shieldTimer = Math.max(0, (window.kart.shieldTimer || 0) - dt);
     window.kart.spinTimer = Math.max(0, (window.kart.spinTimer || 0) - dt);
+    window.kart.stallTimer = Math.max(0, (window.kart.stallTimer || 0) - dt);
     const menuBlocksDrive = (gameMode === 'online' && onlineMenuOpen);
-    const canDrive = (gameState === 'playing') && window.kart.spinTimer <= 0 && !window.kart.finished && !menuBlocksDrive;
+    const canDrive = (gameState === 'playing') && window.kart.spinTimer <= 0 && window.kart.stallTimer <= 0 && !window.kart.finished && !menuBlocksDrive;
     const throttle = canDrive ? ((inputState.accel || settings.auto) ? 1 : 0) : 0;
     const brake = canDrive ? (inputState.brake ? 1 : 0) : 0;
     const steerRaw = canDrive ? ((inputState.left ? -1 : 0) + (inputState.right ? 1 : 0)) : 0;
     if (window.kart.spinTimer > 0) {
       window.kart.heading += dt * 10;
       window.kart.speedForward *= (1 - Math.min(1, dt * 3));
+    }
+    if (window.kart.stallTimer > 0) {
+      window.kart.speedForward = 0;
+      if (window.kart.velocity) window.kart.velocity.multiplyScalar(0.85);
     }
 
     // 1. ISOLATE LOCAL 3D PROXIMITY
@@ -2876,6 +3037,30 @@ window.addEventListener('keyup', (e) => {
 
     body.rotation.z = THREE.MathUtils.lerp(body.rotation.z, window.kart.isDrifting ? -window.kart.driftDir * 0.18 : 0, 0.15);
     cockpit.rotation.z = body.rotation.z;
+    if (window.kart.stallTimer > 0) {
+      const shake = Math.sin(performance.now() * 0.055) * 0.12;
+      body.rotation.z += shake;
+      cockpit.rotation.z = body.rotation.z;
+      body.rotation.x = Math.sin(performance.now() * 0.09) * 0.06;
+      // Gray stall smoke from the engine
+      if (Math.random() < 0.55) {
+        const backPos = window.kart.pos.clone().add(fw.clone().multiplyScalar(-1.2));
+        backPos.y += window.kart.hopOffset + 0.35;
+        const sp = boostSparkParticles[boostSparkCursor];
+        boostSparkCursor = (boostSparkCursor + 1) % boostSparkParticles.length;
+        sp.mesh.position.copy(backPos);
+        sp.mesh.position.x += (Math.random() - 0.5) * 0.5;
+        sp.mesh.material.color.setHex(0x889099);
+        sp.mesh.scale.setScalar(1.2 + Math.random() * 1.4);
+        sp.mesh.material.opacity = 0.7;
+        sp.mesh.visible = true;
+        sp.life = 0.35 + Math.random() * 0.25;
+        sp.maxLife = sp.life;
+        sp.vel.set((Math.random() - 0.5) * 2, 2.5 + Math.random() * 3, (Math.random() - 0.5) * 2);
+      }
+    } else {
+      body.rotation.x = THREE.MathUtils.lerp(body.rotation.x, 0, 0.2);
+    }
 
     const spin = window.kart.velocity.length() * dt * 4; wheels.forEach(w => w.rotation.x -= spin);
     
@@ -3038,7 +3223,10 @@ window.addEventListener('keyup', (e) => {
     document.getElementById('speedBar').style.width = Math.min(100, (Math.abs(window.kart.speedForward) / window.kart.maxSpeed) * 100) + '%';
     
     const boostBadge = document.getElementById('boostBadge');
-    if (window.kart.boostTimer > 0) {
+    if (window.kart.stallTimer > 0) {
+      boostBadge.classList.add('active');
+      boostBadge.textContent = 'ENGINE STALL';
+    } else if (window.kart.boostTimer > 0) {
       boostBadge.classList.add('active'); boostBadge.textContent = `BOOST LVL ${window.kart.lastDriftTier || 1}`;
     } else { boostBadge.classList.remove('active'); }
     
@@ -3178,6 +3366,7 @@ window.addEventListener('keyup', (e) => {
     }
     if (gameState === 'intro' || gameState === 'countdown' || gameState === 'playing' || gameState === 'finished' || gameState === 'spectating') {
       if (gameState === 'intro' && window.updateRaceIntro) window.updateRaceIntro(dt);
+      if (gameState === 'countdown') pollStartBoostInput();
       if (!window.replaying) {
         updateKart(dt); updateRaceLogic(dt); updateAIRacers(dt); updateNetRemotes(dt); updateHazards(dt);
         if (gameMode === 'online' && window.Net && (gameState === 'playing' || gameState === 'countdown' || gameState === 'intro' || gameState === 'finished' || gameState === 'spectating')) {

@@ -11,3 +11,6 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      # Comma-separated account names that get Dev Tools on the live site (e.g. MAXIM)
+      - key: DEV_USERNAMES
+        sync: false

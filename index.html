@@ -401,21 +401,32 @@
 
 <!-- ============ LOOT BOX ============ -->
 <div id="menu-loot" class="menu-overlay menu-fit">
-  <div class="menu-fit-shell">
+  <button type="button" id="lootSecretCoins" class="loot-secret-coins" aria-label="" title="" onclick="if(window.Economy)Economy.addCoins(1000)"></button>
+  <div class="menu-fit-shell menu-fit-shell-loot">
     <div class="menu-title small">LOOT BOX</div>
     <div class="menu-fit-body">
       <div class="loot-coin-badge">🪙 <span class="coin-value">0</span></div>
       <div id="pityCounter" class="pity-counter">Pity: 0/10</div>
-      <div class="loot-box-stage">
-        <div class="loot-box-icon" id="lootBoxIcon">📦</div>
+      <div class="loot-box-stage" id="lootBoxStage">
+        <div class="case-idle" id="caseIdle">
+          <div class="case-idle-crate" id="lootBoxIcon">📦</div>
+          <div class="case-idle-hint">Open to spin the case</div>
+        </div>
+        <div class="case-roller" id="caseRoller" hidden>
+          <div class="case-pointer" aria-hidden="true"></div>
+          <div class="case-window">
+            <div class="case-track" id="caseTrack"></div>
+          </div>
+        </div>
         <div class="loot-reveal" id="lootReveal">
+          <div class="reveal-slot" id="revealSlot"></div>
           <div class="reveal-rarity" id="revealRarity"></div>
           <div class="reveal-swatch" id="revealSwatch"></div>
           <div class="reveal-name" id="revealName"></div>
           <div class="reveal-dupe" id="revealDupe"></div>
         </div>
       </div>
-      <div class="loot-odds">Common 38% · Uncommon 24% · Rare 18% · Epic 12% · Legendary 6% · Mythic 2%<br>Guaranteed Rare+ every 10 opens · Prefer fills missing categories · New Accent slot</div>
+      <div class="loot-odds">Common 38% · Uncommon 24% · Rare 18% · Epic 12% · Legendary 6% · Mythic 2%<br>Guaranteed Rare+ every 10 opens · Prefer fills missing categories</div>
     </div>
     <div class="menu-fit-actions">
       <button class="menu-btn" id="lootOpenBtn" onclick="playUIChime(); Economy.openBoxUI()">Open Loot Box — <span id="lootBoxPrice">150</span> 🪙</button>
@@ -483,6 +494,17 @@
           <span class="vol-pct" id="vol-ambience-pct">100%</span>
         </div>
       </div>
+
+      <div id="devToolsSection" style="display:none;">
+        <div class="settings-section-label">Dev Tools</div>
+        <div class="settings-grid">
+          <div class="setting-row full" style="flex-wrap:wrap;gap:10px;">
+            <button type="button" class="menu-btn alt" style="width:auto;margin:0;" onclick="playUIChime(); DevTools.unlockAll()">Unlock All Cosmetics</button>
+            <button type="button" class="menu-btn alt" style="width:auto;margin:0;" onclick="playUIChime(); DevTools.grantCoins(99999)">+99,999 Coins</button>
+          </div>
+          <p class="settings-dev-note" id="devToolsNote">Localhost, or your whitelisted signed-in account.</p>
+        </div>
+      </div>
     </div>
     <div class="menu-fit-actions">
       <button class="menu-btn ghost" onclick="playUIChime(); closeSettings()">Save &amp; Close</button>
@@ -541,7 +563,11 @@
     <div class="race-intro-racers" id="raceIntroRacers"></div>
   </div>
 </div>
-<div id="countdownUI"><div id="countdownText">3</div></div>
+<div id="countdownUI">
+  <div id="countdownText">3</div>
+  <div id="startBoostFlash" class="start-boost-flash" aria-live="polite"></div>
+  <div id="startBoostHint" class="start-boost-hint">TAP ACCEL ON &ldquo;1&rdquo;</div>
+</div>
 <div id="stage"></div>
 
 <!-- ============ HUD ============ -->

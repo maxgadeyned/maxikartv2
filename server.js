@@ -14,7 +14,22 @@ const Auth = require('./auth');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-db1';
+const BUILD = 'sio-start3';
+const DEV_USERNAMES = String(process.env.DEV_USERNAMES || '')
+  .split(',')
+  .map(s => s.trim().toUpperCase())
+  .filter(Boolean);
+
+function isDevUsername(name) {
+  const n = String(name || '').trim().toUpperCase();
+  return !!n && DEV_USERNAMES.includes(n);
+}
+
+function publicUser(user) {
+  const pub = Store.publicUser(user);
+  if (pub) pub.devTools = isDevUsername(user && user.name);
+  return pub;
+}
 
 const app = express();
 app.use(express.json({ limit: '32kb' }));
@@ -49,14 +64,14 @@ function authedUser(req) {
 app.get('/api/me', (req, res) => {
   const user = authedUser(req);
   if (!user) return res.status(401).json({ ok: false, error: 'auth' });
-  res.json({ ok: true, user: Store.publicUser(user) });
+  res.json({ ok: true, user: publicUser(user) });
 });
 
 app.post('/api/auth/register', (req, res) => {
   try {
     const user = Store.createUser(req.body && req.body.name, req.body && req.body.password);
     const token = Auth.signSession(user.id);
-    res.json({ ok: true, token, user: Store.publicUser(user) });
+    res.json({ ok: true, token, user: publicUser(user) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.code || e.message || 'register-failed' });
   }
@@ -66,7 +81,7 @@ app.post('/api/auth/login', (req, res) => {
   try {
     const user = Store.loginUser(req.body && req.body.name, req.body && req.body.password);
     const token = Auth.signSession(user.id);
-    res.json({ ok: true, token, user: Store.publicUser(user) });
+    res.json({ ok: true, token, user: publicUser(user) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.code || e.message || 'login-failed' });
   }
@@ -77,7 +92,7 @@ app.post('/api/account/name', (req, res) => {
   if (!user) return res.status(401).json({ ok: false, error: 'auth' });
   try {
     const updated = Store.setUserName(user.id, req.body && req.body.name);
-    res.json({ ok: true, user: Store.publicUser(updated) });
+    res.json({ ok: true, user: publicUser(updated) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.code || e.message || 'name-failed' });
   }

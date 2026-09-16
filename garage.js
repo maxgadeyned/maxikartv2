@@ -274,4 +274,13 @@
   if (window.Cosmetics && window.Cosmetics.renderSetsPanel) {
     window.Cosmetics.renderSetsPanel(document.getElementById('garageSetsPanel'));
   }
+
+  window.Garage = {
+    refresh() {
+      resizePreview(); refreshPreviewAppearance(); renderTabs(); renderGrid();
+      if (window.Cosmetics && window.Cosmetics.renderSetsPanel) {
+        window.Cosmetics.renderSetsPanel(document.getElementById('garageSetsPanel'));
+      }
+    }
+  };
 })();

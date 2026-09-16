@@ -295,6 +295,25 @@ function grantItem(id) {
   return true;
 }
 
+/** Dev unlock — localhost or server-flagged account (Account.user.devTools). */
+function unlockAllCosmetics() {
+  const localHost = (() => {
+    const h = (typeof location !== 'undefined' && location.hostname || '').toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
+  })();
+  const flagged = !!(window.Account && Account.getUser && Account.getUser() && Account.getUser().devTools);
+  if (!localHost && !flagged) return 0;
+  let n = 0;
+  ITEM_CATALOG.forEach(item => {
+    if (grantItem(item.id)) n++;
+  });
+  saveInventory();
+  refreshSetBonus();
+  if (window.Garage && typeof window.Garage.refresh === 'function') window.Garage.refresh();
+  else if (typeof window.renderGarageGrid === 'function') window.renderGarageGrid();
+  return n;
+}
+
 function applyEquippedToSettings() {
   CATEGORIES.forEach(cat => {
     const item = findItem(inventory.equipped[cat]);
@@ -334,7 +353,7 @@ if (window.applyCustomization) window.applyCustomization();
 window.Cosmetics = {
   RARITY, RARITY_RANK, ITEM_CATALOG, CATEGORIES, COSMETIC_SETS,
   getInventory: () => inventory,
-  isOwned, isEquipped, equipItem, grantItem,
+  isOwned, isEquipped, equipItem, grantItem, unlockAllCosmetics,
   itemsByCategory: (cat) => ITEM_CATALOG.filter(i => i.category === cat),
   getActiveSet, refreshSetBonus, anyMythicEquipped,
   getSetProgress, renderSetsPanel, getNetworkLook
