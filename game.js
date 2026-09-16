@@ -593,6 +593,7 @@ function returnToOnlineLobby() {
 }
 
 function enterOnlineLobbyUI() {
+  onlineMenuOpen = false;
   gameState = 'menu';
   document.getElementById('hud').style.display = 'none';
   window.replaying = false;
