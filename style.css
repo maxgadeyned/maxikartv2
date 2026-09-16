@@ -714,18 +714,6 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
   60% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -58%) scale(0.95); }
 }
-.start-boost-hint {
-  font-family: var(--font-body);
-  font-size: clamp(12px, 2vw, 16px);
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  color: var(--ink-dim);
-  text-transform: uppercase;
-  opacity: 0.85;
-  margin-top: 8px;
-  transition: opacity 0.25s ease;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.5);
-}
 
 /* ---------------- HUD ---------------- */
 .hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; display: none; flex-direction: column; justify-content: space-between; padding: 18px; }

@@ -1012,47 +1012,33 @@ function getCountdownRemaining() {
   return Math.max(0, (window._countdownEndsAt - performance.now()) / 1000);
 }
 
-function tryStartBoostTiming() {
-  if (gameState !== 'countdown') return;
-  const sb = window.startBoost;
-  if (!sb || sb.resolved) return;
-  const rem = getCountdownRemaining();
-  if (rem <= 0.05) return;
-  sb.resolved = true;
-  if (rem >= 1.0 && rem <= 1.75) {
-    sb.outcome = 'boost';
-    showStartBoostFlash('START BOOST!', 'perfect');
-    playStartBoostCue('perfect');
-  } else if (rem > 1.75) {
-    sb.outcome = 'stall';
-    showStartBoostFlash('TOO EARLY!', 'early');
-    playStartBoostCue('early');
-  } else {
-    sb.outcome = null;
-    showStartBoostFlash('LATE', 'miss');
-    playStartBoostCue('miss');
-  }
-}
-
-/** Edge-detect accel during countdown (covers hold-from-intro — keydown already fired). */
+/**
+ * Hold-based start boost (Mario Kart style):
+ * - Taps / release before GO = nothing
+ * - Start holding in the 1.0–1.75s window and still hold at GO = boost
+ * - Start holding earlier and still hold at GO = stall
+ */
 function pollStartBoostInput() {
   if (gameState !== 'countdown') {
     window._sbAccelLatch = false;
     return;
   }
+  const sb = window.startBoost;
+  if (!sb) return;
   const down = !!(inputState && inputState.accel);
   if (down && !window._sbAccelLatch) {
     window._sbAccelLatch = true;
-    tryStartBoostTiming();
+    // Record when this hold began (remaining seconds). Release clears it.
+    sb.holdStartedRem = getCountdownRemaining();
   } else if (!down) {
     window._sbAccelLatch = false;
+    sb.holdStartedRem = null;
   }
 }
 
 function isAccelEvent(e) {
   const keyMap = (e.key || '').toLowerCase();
   if (keyMap && keyMap === settings.keys.accel) return true;
-  // Fallback for layout / browser quirks
   const code = e.code || '';
   const accel = settings.keys.accel;
   if (accel === 'w' && code === 'KeyW') return true;
@@ -1061,10 +1047,24 @@ function isAccelEvent(e) {
   return false;
 }
 
+function resolveStartBoostOutcome() {
+  const sb = window.startBoost;
+  if (!sb) return null;
+  const holding = !!(inputState && inputState.accel);
+  const started = sb.holdStartedRem;
+  if (!holding || started == null) return null;
+  if (started >= 1.0 && started <= 1.75) return 'boost';
+  if (started > 1.75) return 'stall';
+  return null; // late hold — normal launch
+}
+
 function applyStartBoostOnGo() {
   const sb = window.startBoost;
   if (!sb || !window.kart) return;
-  if (sb.outcome === 'boost') {
+  // Final edge sample in case key state changed this frame
+  pollStartBoostInput();
+  const outcome = resolveStartBoostOutcome();
+  if (outcome === 'boost') {
     window.kart.lastDriftTier = 1;
     window.kart.boostDuration = 0.65;
     window.kart.boostTimer = 0.65;
@@ -1072,11 +1072,15 @@ function applyStartBoostOnGo() {
     window.kart.speedForward = Math.min(window.kart.maxSpeed + 4, window.kart.speedForward + 6);
     window.cameraShakeTimer = 0.22;
     if (window.playBoostWhoosh) window.playBoostWhoosh();
-  } else if (sb.outcome === 'stall') {
+    showStartBoostFlash('START BOOST!', 'perfect');
+    playStartBoostCue('perfect');
+  } else if (outcome === 'stall') {
     window.kart.stallTimer = 1.05;
     window.kart.speedForward = 0;
     if (window.kart.velocity) window.kart.velocity.set(0, 0, 0);
     window.cameraShakeTimer = 0.35;
+    showStartBoostFlash('ENGINE STALL!', 'early');
+    playStartBoostCue('early');
   }
   window.startBoost = null;
 }
@@ -1086,17 +1090,14 @@ function startCountdown() {
   const ui = document.getElementById('countdownUI');
   const txt = document.getElementById('countdownText');
   const flash = document.getElementById('startBoostFlash');
-  const hint = document.getElementById('startBoostHint');
   if (flash) { flash.className = 'start-boost-flash'; flash.textContent = ''; }
-  if (hint) hint.style.opacity = '1';
   ui.classList.remove('sb-perfect', 'sb-early', 'sb-miss');
   ui.style.display = 'flex';
   let count = 3;
   txt.innerText = count;
   txt.style.color = 'var(--ember)';
   window._countdownEndsAt = performance.now() + 3000;
-  window.startBoost = { resolved: false, outcome: null };
-  // If already holding accel from intro/menu, treat as a fresh press at countdown start
+  window.startBoost = { holdStartedRem: null };
   window._sbAccelLatch = false;
   playCountdownBeep(count);
   const timer = setInterval(() => {
@@ -1116,7 +1117,6 @@ function startCountdown() {
     } else if (count === 0) {
       txt.innerText = 'GO!';
       txt.style.color = 'var(--teal)';
-      if (hint) hint.style.opacity = '0';
       applyStartBoostOnGo();
       gameState = 'playing';
       playCountdownBeep(count);
@@ -1126,7 +1126,6 @@ function startCountdown() {
       ui.classList.remove('sb-perfect', 'sb-early', 'sb-miss');
       txt.style.color = 'var(--ember)';
       if (flash) { flash.className = 'start-boost-flash'; flash.textContent = ''; }
-      if (hint) hint.style.opacity = '0';
     }
   }, 1000);
 }
@@ -1523,7 +1522,6 @@ window.addEventListener('keydown', (e) => {
   if (gameState !== 'playing' && gameState !== 'countdown') return;
   if (isAccelEvent(e)) {
     inputState.accel = true;
-    if (gameState === 'countdown' && !e.repeat) tryStartBoostTiming();
   }
   if (keyMap === settings.keys.brake) inputState.brake = true;
   if (keyMap === settings.keys.left) inputState.left = true; 
