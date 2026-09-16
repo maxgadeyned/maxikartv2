@@ -323,6 +323,7 @@ window.playLootReveal = playLootReveal;
 
 // ---------- UI State Machine ----------
 let gameState = 'menu'; let previousState = 'menu'; let gameMode = 'free';
+let onlineMenuOpen = false;
 let raceTime = 0; let currentLap = 1; 
 let nextCheckpointIndex = 0; let lastFinishDot = 0;
 let currentRunGhostData = [];
@@ -337,8 +338,15 @@ function navTo(targetId) {
 
 function openSettings() { 
   document.getElementById('bindWarningText').innerText = "";
-  previousState = gameState; gameState = 'settings'; 
   refreshVolumeUI();
+  if (gameMode === 'online' && (onlineMenuOpen || gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating')) {
+    // Keep the race simulating while settings are open
+    onlineMenuOpen = true;
+    clearDriveInput();
+    navTo('menu-settings');
+    return;
+  }
+  previousState = gameState; gameState = 'settings'; 
   navTo('menu-settings'); 
 }
 
@@ -349,8 +357,56 @@ function closeSettings() {
     awaitingBind = null;
   }
   document.getElementById('bindWarningText').innerText = "";
-  saveConfig(); gameState = previousState; 
+  saveConfig();
+  if (gameMode === 'online' && onlineMenuOpen) {
+    updateOnlineRestartUI();
+    navTo('menu-pause');
+    return;
+  }
+  gameState = previousState; 
   if (gameState === 'paused') navTo('menu-pause'); else navTo('menu-main'); 
+}
+
+function pauseGame() {
+  if (gameMode === 'online') {
+    openOnlineMenu();
+    return;
+  }
+  if (gameState !== 'playing' && gameState !== 'countdown' && gameState !== 'spectating') return;
+  window._pausedFromSpectate = gameState === 'spectating';
+  previousState = gameState;
+  gameState = 'paused';
+  updateOnlineRestartUI();
+  navTo('menu-pause');
+  if (window.suspendGameAudio) window.suspendGameAudio();
+}
+function resumeGame() {
+  if (gameMode === 'online') {
+    closeOnlineMenu();
+    return;
+  }
+  gameState = window._pausedFromSpectate ? 'spectating' : 'playing';
+  window._pausedFromSpectate = false;
+  document.querySelectorAll('.menu-overlay').forEach(el => el.classList.remove('active'));
+  if (gameState === 'spectating') {
+    const ui = document.getElementById('spectateUI');
+    if (ui) ui.style.display = 'flex';
+  }
+  if (window.resumeGameAudio) window.resumeGameAudio();
+}
+function quitToMenu() {
+  onlineMenuOpen = false;
+  gameState = 'menu';
+  document.getElementById('hud').style.display = 'none';
+  hideSpectateUI();
+  if (window.Net && Net.isOnline()) Net.leave();
+  navTo('menu-main');
+  const coinChip = document.getElementById('coinChip');
+  if (coinChip) coinChip.classList.remove('in-race');
+  if (window.clearAIRacers) window.clearAIRacers();
+  if (window.clearNetRemotes) window.clearNetRemotes();
+  if (window.clearHazards) window.clearHazards();
+  if (window.suspendGameAudio) window.suspendGameAudio();
 }
 
 function restartRace() {
@@ -364,9 +420,46 @@ function updateOnlineRestartUI() {
     const el = document.getElementById(id);
     if (el) el.style.display = online ? 'none' : '';
   });
+  const title = document.getElementById('pauseTitle');
+  if (title) title.textContent = online ? 'MENU' : 'PAUSED';
+  const resumeBtn = document.getElementById('pauseResumeBtn');
+  if (resumeBtn) {
+    resumeBtn.innerHTML = online
+      ? '<span class="btn-ico">▶</span>Back to Race'
+      : '<span class="btn-ico">▶</span>Resume';
+  }
   const guide = document.getElementById('hudKeyGuide');
   if (guide && online) {
-    guide.innerHTML = `ESC: PAUSE | ${formatKey(settings.keys.item)}: USE ITEM<br>${formatKey(settings.keys.cam)}: CAM | ${formatKey(settings.keys.rear)}: LOOK BACK`;
+    guide.innerHTML = `ESC: MENU | ${formatKey(settings.keys.item)}: USE ITEM<br>${formatKey(settings.keys.cam)}: CAM | ${formatKey(settings.keys.rear)}: LOOK BACK`;
+  }
+}
+
+function clearDriveInput() {
+  inputState.accel = false;
+  inputState.brake = false;
+  inputState.left = false;
+  inputState.right = false;
+  inputState.drift = false;
+  window.lookBehind = false;
+}
+
+/** Online: ESC opens a live overlay — race keeps simulating (no freeze). */
+function openOnlineMenu() {
+  if (gameMode !== 'online') return;
+  if (gameState !== 'playing' && gameState !== 'countdown' && gameState !== 'spectating') return;
+  onlineMenuOpen = true;
+  clearDriveInput();
+  updateOnlineRestartUI();
+  navTo('menu-pause');
+}
+
+function closeOnlineMenu() {
+  if (!onlineMenuOpen) return;
+  onlineMenuOpen = false;
+  document.querySelectorAll('.menu-overlay').forEach(el => el.classList.remove('active'));
+  if (gameState === 'spectating') {
+    const ui = document.getElementById('spectateUI');
+    if (ui) ui.style.display = 'flex';
   }
 }
 
@@ -488,39 +581,6 @@ function startGame(mode) {
   if (pauseMap) pauseMap.textContent = MAPS[activeMapIndex].name + ' · ' + maxLaps + ' LAP' + (maxLaps>1?'S':'');
   updateOnlineRestartUI();
   if (mode === 'timed' || mode === 'multiplayer' || mode === 'online') { gameState = 'countdown'; startCountdown(); } else { gameState = 'playing'; }
-}
-
-function pauseGame() {
-  if (gameState !== 'playing' && gameState !== 'countdown' && gameState !== 'spectating') return;
-  window._pausedFromSpectate = gameState === 'spectating';
-  previousState = gameState;
-  gameState = 'paused';
-  updateOnlineRestartUI();
-  navTo('menu-pause');
-  if (window.suspendGameAudio) window.suspendGameAudio();
-}
-function resumeGame() {
-  gameState = window._pausedFromSpectate ? 'spectating' : 'playing';
-  window._pausedFromSpectate = false;
-  document.querySelectorAll('.menu-overlay').forEach(el => el.classList.remove('active'));
-  if (gameState === 'spectating') {
-    const ui = document.getElementById('spectateUI');
-    if (ui) ui.style.display = 'flex';
-  }
-  if (window.resumeGameAudio) window.resumeGameAudio();
-}
-function quitToMenu() {
-  gameState = 'menu';
-  document.getElementById('hud').style.display = 'none';
-  hideSpectateUI();
-  if (window.Net && Net.isOnline()) Net.leave();
-  navTo('menu-main');
-  const coinChip = document.getElementById('coinChip');
-  if (coinChip) coinChip.classList.remove('in-race');
-  if (window.clearAIRacers) window.clearAIRacers();
-  if (window.clearNetRemotes) window.clearNetRemotes();
-  if (window.clearHazards) window.clearHazards();
-  if (window.suspendGameAudio) window.suspendGameAudio();
 }
 
 /** Online: end race UI and bring everyone back to the same room lobby (keep connections). */
@@ -929,7 +989,23 @@ window.addEventListener('keydown', (e) => {
     settings.keys[currentAction] = keyMap; document.getElementById(`bind-${currentAction}`).innerText = formatKey(keyMap); document.getElementById(`bind-${currentAction}`).classList.remove('waiting'); awaitingBind = null; warnEl.innerText = ""; saveConfig(); refreshKeybindUI(); playUIChime(); return;
   }
 
-  if (keyMap === 'escape') { if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating') pauseGame(); else if (gameState === 'paused') resumeGame(); return; }
+  if (keyMap === 'escape') {
+    if (gameMode === 'online') {
+      if (onlineMenuOpen) {
+        // If settings is open, go back to race menu; else close overlay
+        const settingsOpen = document.getElementById('menu-settings')?.classList.contains('active');
+        if (settingsOpen) closeSettings();
+        else closeOnlineMenu();
+      } else if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating') {
+        openOnlineMenu();
+      }
+      return;
+    }
+    if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+    return;
+  }
+  if (gameMode === 'online' && onlineMenuOpen) return;
   if (gameState === 'spectating' && (keyMap === 'q' || keyMap === 'e')) {
     cycleSpectate(keyMap === 'e' ? 1 : -1);
     return;
@@ -2098,7 +2174,8 @@ window.addEventListener('keyup', (e) => {
   function updateKart(dt) {
     window.kart.shieldTimer = Math.max(0, (window.kart.shieldTimer || 0) - dt);
     window.kart.spinTimer = Math.max(0, (window.kart.spinTimer || 0) - dt);
-    const canDrive = (gameState === 'playing') && window.kart.spinTimer <= 0 && !window.kart.finished;
+    const menuBlocksDrive = (gameMode === 'online' && onlineMenuOpen);
+    const canDrive = (gameState === 'playing') && window.kart.spinTimer <= 0 && !window.kart.finished && !menuBlocksDrive;
     const throttle = canDrive ? ((inputState.accel || settings.auto) ? 1 : 0) : 0;
     const brake = canDrive ? (inputState.brake ? 1 : 0) : 0;
     const steerRaw = canDrive ? ((inputState.left ? -1 : 0) + (inputState.right ? 1 : 0)) : 0;

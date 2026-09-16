@@ -379,9 +379,9 @@
 
 <!-- ============ PAUSE ============ -->
 <div id="menu-pause" class="menu-overlay">
-  <div class="menu-title small">PAUSED</div>
+  <div class="menu-title small" id="pauseTitle">PAUSED</div>
   <div id="pauseMapInfo" class="pause-map-info"></div>
-  <button class="menu-btn" onclick="playUIChime(); resumeGame()"><span class="btn-ico">▶</span>Resume</button>
+  <button class="menu-btn" id="pauseResumeBtn" onclick="playUIChime(); resumeGame()"><span class="btn-ico">▶</span>Resume</button>
   <button class="menu-btn alt" id="pauseRestartBtn" onclick="playUIChime(); restartRace()">Restart Race</button>
   <button class="menu-btn alt" onclick="playUIChime(); openSettings()"><span class="btn-ico">⚙</span>Settings</button>
   <button class="menu-btn danger" onclick="playUIChime(); quitToMenu()"><span class="btn-ico">✕</span>Quit to Menu</button>
