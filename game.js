@@ -604,9 +604,10 @@ function startGame(mode, opts) {
   if (legend) legend.innerHTML = mode === 'online' ? '● You &nbsp; ● Racers &nbsp; ■ Box' : '● You &nbsp; ● AI &nbsp; ■ Box';
   
   const spawnItems = ((mode === 'multiplayer' || mode === 'online') && settings.items !== false);
-  document.getElementById('hudItemSlot').style.display = spawnItems ? 'flex' : 'none';
-  document.getElementById('hudItemSlot').innerText = '';
-  document.getElementById('hudItemSlot').classList.remove('spinning');
+  const showItemHud = spawnItems || mode === 'timed';
+  document.getElementById('hudItemSlot').style.display = showItemHud ? 'flex' : 'none';
+  document.getElementById('hudItemSlot').innerHTML = '';
+  document.getElementById('hudItemSlot').classList.remove('spinning', 'has-stack');
   
   if (settings.sound && window.initAudio) window.initAudio();
   if (window.buildTrack) window.buildTrack(MAPS[activeMapIndex].points, spawnItems);
@@ -628,6 +629,7 @@ function startGame(mode, opts) {
   window.kart.hopVelY = 0;
   window.kart.grounded = true;
   window.kart.item = null;
+  window.kart.itemCount = 0;
   window.kart.shieldTimer = 0;
   window.kart.spinTimer = 0;
   window.kart.finished = false;
@@ -685,6 +687,9 @@ function startGame(mode, opts) {
   const pauseMap = document.getElementById('pauseMapInfo');
   if (pauseMap) pauseMap.textContent = MAPS[activeMapIndex].name + ' · ' + maxLaps + ' LAP' + (maxLaps>1?'S':'');
   updateOnlineRestartUI();
+  if (mode === 'timed') {
+    if (window.grantTimedMushroomStock) window.grantTimedMushroomStock(maxLaps);
+  }
   if (mode === 'timed' || mode === 'multiplayer' || mode === 'online') {
     if (skipIntro) {
       clearRaceIntro();
@@ -1355,7 +1360,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (keyMap === settings.keys.cam) { window.cameraView = window.cameraView === 'fpv' ? 'chase' : 'fpv'; return; }
   if (keyMap === settings.keys.rear) { window.lookBehind = true; return; }
-  if (keyMap === settings.keys.item && gameState === 'playing' && window.kart.item) {
+  if (keyMap === settings.keys.item && gameState === 'playing' && window.kart.item && (window.kart.itemCount || 0) > 0) {
     if (window.usePlayerItem) window.usePlayerItem();
   }
 
@@ -2081,6 +2086,7 @@ window.addEventListener('keyup', (e) => {
   function grantItemTo(target, place) {
     const id = window.RaceKit ? window.RaceKit.rollItem(place || 2) : 'MUSHROOM';
     target.item = id;
+    target.itemCount = 1;
     return id;
   }
 
