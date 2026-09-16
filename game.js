@@ -2143,14 +2143,52 @@ window.addEventListener('keyup', (e) => {
     window.raceHazards.fakeBoxes.push({ mesh, pos: mesh.position.clone(), life: 50, owner });
   }
 
+  function refreshPlayerItemHud() {
+    const slot = document.getElementById('hudItemSlot');
+    if (!slot) return;
+    const item = window.kart.item;
+    const count = window.kart.itemCount || 0;
+    slot.classList.remove('spinning');
+    if (!item || count <= 0) {
+      slot.innerHTML = '';
+      slot.classList.remove('has-stack');
+      return;
+    }
+    const icon = window.RaceKit ? window.RaceKit.itemIcon(item) : '🍄';
+    if (count > 1) {
+      slot.innerHTML = `<span class="item-icon">${icon}</span><span class="item-stack">×${count}</span>`;
+      slot.classList.add('has-stack');
+    } else {
+      slot.textContent = icon;
+      slot.classList.remove('has-stack');
+    }
+  }
+
+  function grantTimedMushroomStock(count) {
+    const n = Math.max(0, count | 0);
+    if (n <= 0) {
+      window.kart.item = null;
+      window.kart.itemCount = 0;
+    } else {
+      window.kart.item = 'MUSHROOM';
+      window.kart.itemCount = n;
+    }
+    refreshPlayerItemHud();
+  }
+  window.grantTimedMushroomStock = grantTimedMushroomStock;
+  window.refreshPlayerItemHud = refreshPlayerItemHud;
+
   function useItemFor(racer, isPlayer) {
     const item = racer.item;
     if (!item) return;
-    racer.item = null;
-    if (isPlayer) {
-      const slot = document.getElementById('hudItemSlot');
-      if (slot) { slot.innerText = ''; slot.classList.remove('spinning'); }
+    const stack = racer.itemCount || 1;
+    if (stack > 1) {
+      racer.itemCount = stack - 1;
+    } else {
+      racer.item = null;
+      racer.itemCount = 0;
     }
+    if (isPlayer) refreshPlayerItemHud();
     const pos = isPlayer ? window.kart.pos : racer.pos;
     const heading = isPlayer ? window.kart.heading : racer.heading;
 
@@ -2186,6 +2224,7 @@ window.addEventListener('keyup', (e) => {
       const slot = document.getElementById('hudItemSlot');
       if (!slot) return;
       slot.classList.add('spinning');
+      slot.classList.remove('has-stack');
       const icons = window.RaceKit ? Object.values(window.RaceKit.ITEMS).map(i => i.icon) : ['🍄','🟢','🍌','🛡️','📦'];
       let n = 0;
       const iv = setInterval(() => {
@@ -2193,8 +2232,7 @@ window.addEventListener('keyup', (e) => {
         n++;
         if (n > 12) {
           clearInterval(iv);
-          slot.classList.remove('spinning');
-          slot.innerText = window.RaceKit ? window.RaceKit.itemIcon(id) : '🍄';
+          refreshPlayerItemHud();
         }
       }, 50);
     }
