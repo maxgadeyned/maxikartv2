@@ -264,6 +264,19 @@
   syncNameInputs();
   refreshAccountUI();
 
+  // Warn when the live host is on wipeable file storage
+  fetch('/api/config').then(r => r.json()).then(cfg => {
+    if (!cfg || cfg.persistence !== 'file') return;
+    const host = (location.hostname || '').toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1') return;
+    const status = document.getElementById('accountStatus');
+    if (status && !Account.token) {
+      status.textContent = 'Server storage is temporary — accounts/boards reset on deploy. Ask admin to set DATABASE_URL.';
+      status.classList.remove('on');
+    }
+    console.warn('[maxikart]', cfg.warning || 'Ephemeral persistence');
+  }).catch(() => {});
+
   const accountMenu = document.getElementById('menu-account');
   if (accountMenu) {
     const obs = new MutationObserver(() => {

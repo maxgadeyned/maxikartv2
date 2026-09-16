@@ -59,7 +59,13 @@ async function init() {
   if (!DATABASE_URL) {
     cache = loadFile();
     ready = true;
-    console.log('[store] Using local JSON file (set DATABASE_URL for durable cloud storage)');
+    const onRender = !!(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+    if (onRender) {
+      console.error('[store] WARNING: No DATABASE_URL on Render — accounts/leaderboards RESET on every deploy.');
+      console.error('[store] Add a Neon/Supabase Postgres URL as DATABASE_URL in the Render dashboard.');
+    } else {
+      console.log('[store] Using local JSON file (set DATABASE_URL for durable cloud storage)');
+    }
     return;
   }
   try {

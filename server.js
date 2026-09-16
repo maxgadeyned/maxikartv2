@@ -14,7 +14,7 @@ const Auth = require('./auth');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-start3';
+const BUILD = 'sio-db2';
 const DEV_USERNAMES = String(process.env.DEV_USERNAMES || '')
   .split(',')
   .map(s => s.trim().toUpperCase())
@@ -38,7 +38,11 @@ app.get('/api/config', (_req, res) => {
   res.json({
     ok: true,
     build: BUILD,
-    persistence: Store.persistenceMode()
+    persistence: Store.persistenceMode(),
+    durable: Store.persistenceMode() === 'postgres',
+    warning: Store.persistenceMode() === 'file'
+      ? 'Ephemeral file storage — accounts and leaderboards reset on deploy. Set DATABASE_URL (Neon) on Render.'
+      : null
   });
 });
 
