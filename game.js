@@ -372,7 +372,7 @@ function pauseGame() {
     openOnlineMenu();
     return;
   }
-  if (gameState !== 'playing' && gameState !== 'countdown' && gameState !== 'spectating') return;
+  if (gameState !== 'playing' && gameState !== 'countdown' && gameState !== 'spectating' && gameState !== 'intro') return;
   window._pausedFromSpectate = gameState === 'spectating';
   previousState = gameState;
   gameState = 'paused';
@@ -385,7 +385,8 @@ function resumeGame() {
     closeOnlineMenu();
     return;
   }
-  gameState = window._pausedFromSpectate ? 'spectating' : 'playing';
+  gameState = window._pausedFromSpectate ? 'spectating' : previousState;
+  if (gameState === 'paused' || gameState === 'menu' || gameState === 'settings') gameState = 'playing';
   window._pausedFromSpectate = false;
   document.querySelectorAll('.menu-overlay').forEach(el => el.classList.remove('active'));
   if (gameState === 'spectating') {
@@ -570,13 +571,10 @@ function startGame(mode) {
   const pauseMap = document.getElementById('pauseMapInfo');
   if (pauseMap) pauseMap.textContent = MAPS[activeMapIndex].name + ' · ' + maxLaps + ' LAP' + (maxLaps>1?'S':'');
   updateOnlineRestartUI();
-  if (mode === 'online') {
+  if (mode === 'timed' || mode === 'multiplayer' || mode === 'online') {
     document.getElementById('hud').style.display = 'none';
     gameState = 'intro';
     beginRaceIntro();
-  } else if (mode === 'timed' || mode === 'multiplayer') {
-    gameState = 'countdown';
-    startCountdown();
   } else {
     gameState = 'playing';
   }
@@ -613,6 +611,27 @@ function clearRaceIntro() {
   }
 }
 
+function buildIntroRacerRows() {
+  if (gameMode === 'online' && window.Net && Net.getPlayers) {
+    return Net.getPlayers().map(p => ({
+      name: p.name || 'RACER',
+      col: (p.look && p.look.bodyColor) || '#37e6c8',
+      slot: p.slot | 0,
+      you: !!p.you
+    }));
+  }
+  const youName = localStorage.getItem('kartPlayerName') || 'YOU';
+  const youCol = (window.settings && settings.bodyColor) || '#37e6c8';
+  const rows = [{ name: youName, col: youCol, slot: 0, you: true }];
+  if (gameMode === 'multiplayer' && window.aiRacers && window.aiRacers.length) {
+    window.aiRacers.forEach((ai, i) => {
+      const hex = ((ai.color >>> 0) & 0xffffff).toString(16).padStart(6, '0');
+      rows.push({ name: ai.name || ('AI ' + (i + 1)), col: '#' + hex, slot: i + 1, you: false });
+    });
+  }
+  return rows;
+}
+
 function beginRaceIntro() {
   clearRaceIntro();
   if (!window.pts || !window.pts.length) {
@@ -644,10 +663,9 @@ function beginRaceIntro() {
     metaEl.textContent = `${maxLaps} LAP${maxLaps > 1 ? 'S' : ''} · ${String(weatherLabel).toUpperCase()}${settings.night ? ' · NIGHT' : ''}`;
   }
   if (listEl) {
-    const players = (window.Net && Net.getPlayers) ? Net.getPlayers() : [];
+    const players = buildIntroRacerRows();
     listEl.innerHTML = players.map((p, i) => {
-      const col = (p.look && p.look.bodyColor) || '#37e6c8';
-      return `<div class="race-intro-racer${p.you ? ' you' : ''}" style="--racer-col:${col};animation-delay:${0.28 + i * 0.07}s">
+      return `<div class="race-intro-racer${p.you ? ' you' : ''}" style="--racer-col:${p.col};animation-delay:${0.28 + i * 0.07}s">
         <span class="race-intro-swatch"></span>
         <span class="race-intro-racer-meta">
           <span class="race-intro-slot">P${(p.slot | 0) + 1}${p.you ? ' · YOU' : ''}</span>
@@ -667,9 +685,9 @@ function beginRaceIntro() {
     t: 0,
     phase: 'preview',
     center,
-    // Lower, closer sweep so the track fills the frame instead of empty sky
-    radius: span * 0.52,
-    height: Math.max(26, span * 0.095),
+    // High overview looking down at the circuit — close enough that ground fills the shot
+    radius: span * 0.36,
+    height: Math.max(52, span * 0.22),
     angle: Math.atan2(window.kart.pos.x - center.x, window.kart.pos.z - center.z) + 0.6,
     startPos: start.pos.clone(),
     startHeading: start.heading,
@@ -718,19 +736,15 @@ function raceIntroCamera(camera, camTargetPos, camTargetLook) {
 
   let idealPos, idealLook;
   if (ri.phase === 'preview') {
-    // Orbit looking across the circuit — aim past the center so horizon sits mid-frame
+    // High orbit looking down at the track so the map fills the frame
     idealPos = new THREE.Vector3(
       ri.center.x + Math.sin(ri.angle) * ri.radius,
       ri.center.y + ri.height,
       ri.center.z + Math.cos(ri.angle) * ri.radius
     );
-    idealLook = new THREE.Vector3(
-      ri.center.x - Math.sin(ri.angle) * ri.radius * 0.25,
-      ri.center.y + ri.height * 0.35,
-      ri.center.z - Math.cos(ri.angle) * ri.radius * 0.25
-    );
-    if (camera.fov !== 70) {
-      camera.fov = 70;
+    idealLook = new THREE.Vector3(ri.center.x, ri.center.y + 1.5, ri.center.z);
+    if (camera.fov !== 62) {
+      camera.fov = 62;
       camera.updateProjectionMatrix();
     }
   } else if (ri.phase === 'lineup') {
@@ -1192,7 +1206,7 @@ window.addEventListener('keydown', (e) => {
       }
       return;
     }
-    if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating') pauseGame();
+    if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating' || gameState === 'intro') pauseGame();
     else if (gameState === 'paused') resumeGame();
     return;
   }
