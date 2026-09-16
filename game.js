@@ -526,7 +526,7 @@ function quitToMenu() {
 
 function restartRace() {
   if (gameMode === 'online') return;
-  startGame(gameMode);
+  startGame(gameMode, { skipIntro: true });
 }
 
 function updateOnlineRestartUI() {
@@ -578,9 +578,10 @@ function closeOnlineMenu() {
   }
 }
 
-function startGame(mode) {
+function startGame(mode, opts) {
   if (document.activeElement) document.activeElement.blur();
   gameMode = mode;
+  const skipIntro = !!(opts && opts.skipIntro);
 
   const mapId = MAPS[activeMapIndex].id;
   bestTime = localStorage.getItem(`kartBest_${mapId}_${maxLaps}`) ? parseFloat(localStorage.getItem(`kartBest_${mapId}_${maxLaps}`)) : null;
@@ -685,9 +686,16 @@ function startGame(mode) {
   if (pauseMap) pauseMap.textContent = MAPS[activeMapIndex].name + ' · ' + maxLaps + ' LAP' + (maxLaps>1?'S':'');
   updateOnlineRestartUI();
   if (mode === 'timed' || mode === 'multiplayer' || mode === 'online') {
-    document.getElementById('hud').style.display = 'none';
-    gameState = 'intro';
-    beginRaceIntro();
+    if (skipIntro) {
+      clearRaceIntro();
+      document.getElementById('hud').style.display = 'flex';
+      gameState = 'countdown';
+      startCountdown();
+    } else {
+      document.getElementById('hud').style.display = 'none';
+      gameState = 'intro';
+      beginRaceIntro();
+    }
   } else {
     gameState = 'playing';
   }
