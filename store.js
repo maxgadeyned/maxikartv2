@@ -52,10 +52,6 @@ function sanitizeName(raw) {
   return String(raw || 'RACER').toUpperCase().replace(/[^A-Z0-9_\- ]/g, '').trim().slice(0, 12) || 'RACER';
 }
 
-function hashPin(pin, salt) {
-  return crypto.scryptSync(String(pin), salt, 32).toString('hex');
-}
-
 function newId(prefix) {
   return prefix + crypto.randomBytes(8).toString('hex');
 }
@@ -70,8 +66,8 @@ function publicUser(u) {
   };
 }
 
-function findByGoogleSub(sub) {
-  return Object.values(cache.users).find(u => u.googleSub === sub) || null;
+function hashSecret(secret, salt) {
+  return crypto.scryptSync(String(secret), salt, 32).toString('hex');
 }
 
 function findByName(name) {
@@ -79,55 +75,36 @@ function findByName(name) {
   return Object.values(cache.users).find(u => u.name === n) || null;
 }
 
-function upsertGoogleUser(profile) {
-  const sub = String(profile.sub || '');
-  if (!sub) throw new Error('missing-google-sub');
-  let user = findByGoogleSub(sub);
-  if (!user) {
-    user = {
-      id: newId('g_'),
-      provider: 'google',
-      googleSub: sub,
-      email: profile.email || null,
-      name: sanitizeName((profile.name || profile.email || 'RACER').split('@')[0].slice(0, 12)),
-      createdAt: Date.now()
-    };
-    // Avoid colliding display names
-    let base = user.name;
-    let i = 2;
-    while (findByName(user.name) && findByName(user.name).id !== user.id) {
-      user.name = (base.slice(0, 10) + i).slice(0, 12);
-      i++;
-    }
-    cache.users[user.id] = user;
-    save();
-  } else if (profile.email && !user.email) {
-    user.email = profile.email;
-    save();
+function validatePassword(password) {
+  const p = String(password || '');
+  if (p.length < 4 || p.length > 64) {
+    const err = new Error('bad-password');
+    err.code = 'bad-password';
+    throw err;
   }
-  return user;
+  return p;
 }
 
-function createPinUser(name, pin) {
+function createUser(name, password) {
   const clean = sanitizeName(name);
+  if (clean.length < 2) {
+    const err = new Error('bad-name');
+    err.code = 'bad-name';
+    throw err;
+  }
   if (findByName(clean)) {
     const err = new Error('name-taken');
     err.code = 'name-taken';
     throw err;
   }
-  const pinStr = String(pin || '');
-  if (!/^\d{4,6}$/.test(pinStr)) {
-    const err = new Error('bad-pin');
-    err.code = 'bad-pin';
-    throw err;
-  }
+  const pass = validatePassword(password);
   const salt = crypto.randomBytes(8).toString('hex');
   const user = {
-    id: newId('p_'),
-    provider: 'pin',
+    id: newId('u_'),
+    provider: 'password',
     name: clean,
-    pinSalt: salt,
-    pinHash: hashPin(pinStr, salt),
+    passSalt: salt,
+    passHash: hashSecret(pass, salt),
     createdAt: Date.now()
   };
   cache.users[user.id] = user;
@@ -135,20 +112,35 @@ function createPinUser(name, pin) {
   return user;
 }
 
-function loginPinUser(name, pin) {
+function loginUser(name, password) {
   const user = findByName(name);
-  if (!user || user.provider !== 'pin' || !user.pinHash) {
+  if (!user) {
     const err = new Error('bad-login');
     err.code = 'bad-login';
     throw err;
   }
-  const hash = hashPin(String(pin || ''), user.pinSalt);
-  if (hash !== user.pinHash) {
-    const err = new Error('bad-login');
-    err.code = 'bad-login';
-    throw err;
+  const pass = String(password || '');
+  // Password accounts
+  if (user.passHash && user.passSalt) {
+    if (hashSecret(pass, user.passSalt) !== user.passHash) {
+      const err = new Error('bad-login');
+      err.code = 'bad-login';
+      throw err;
+    }
+    return user;
   }
-  return user;
+  // Legacy PIN accounts (from earlier build)
+  if (user.pinHash && user.pinSalt) {
+    if (hashSecret(pass, user.pinSalt) !== user.pinHash) {
+      const err = new Error('bad-login');
+      err.code = 'bad-login';
+      throw err;
+    }
+    return user;
+  }
+  const err = new Error('bad-login');
+  err.code = 'bad-login';
+  throw err;
 }
 
 function getUser(id) {
@@ -238,9 +230,8 @@ module.exports = {
   ALLOWED_MAPS,
   ALLOWED_LAPS,
   publicUser,
-  upsertGoogleUser,
-  createPinUser,
-  loginPinUser,
+  createUser,
+  loginUser,
   getUser,
   setUserName,
   getBoard,

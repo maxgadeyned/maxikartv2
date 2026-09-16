@@ -310,39 +310,33 @@
           onchange="Account.applyNameLocally(this.value); Account.syncNameInputs();">
       </div>
     </div>
-    <p class="account-hint">Play freely as a guest. Sign in to save times to the global leaderboard and keep your name.</p>
+    <p class="account-hint">Play freely as a guest. Create an account to save times on the global leaderboard and keep your name.</p>
 
-    <div id="accountGoogleWrap" class="account-google" style="display:none;">
-      <div class="account-divider">Sign in with Google</div>
-      <div id="googleSignInBtn" class="google-btn-host"></div>
-    </div>
-    <p id="accountNoGoogleHint" class="account-hint" style="display:none;">Google login works when <code>GOOGLE_CLIENT_ID</code> is set on the server. You can still save an account with a PIN below.</p>
-
-    <div class="account-divider">Save account with PIN</div>
+    <div class="account-divider">Create account</div>
     <div class="settings-grid single-col">
       <div class="setting-row full">
-        <span class="setting-label">New Name</span>
+        <span class="setting-label">Username</span>
         <input type="text" id="accountRegName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
       </div>
       <div class="setting-row full">
-        <span class="setting-label">New PIN</span>
-        <input type="password" id="accountRegPin" class="room-code-input" maxlength="6" inputmode="numeric" placeholder="4–6 digits">
+        <span class="setting-label">Password</span>
+        <input type="password" id="accountRegPass" class="room-code-input" maxlength="64" placeholder="4+ characters" autocomplete="new-password">
       </div>
     </div>
-    <button class="menu-btn" onclick="Account.registerPin()"><span class="btn-ico">✨</span>Create Account</button>
+    <button class="menu-btn" onclick="Account.register()"><span class="btn-ico">✨</span>Create Account</button>
 
-    <div class="account-divider">Already have a PIN account?</div>
+    <div class="account-divider">Log in</div>
     <div class="settings-grid single-col">
       <div class="setting-row full">
-        <span class="setting-label">Name</span>
-        <input type="text" id="accountLoginName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+        <span class="setting-label">Username</span>
+        <input type="text" id="accountLoginName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;" autocomplete="username">
       </div>
       <div class="setting-row full">
-        <span class="setting-label">PIN</span>
-        <input type="password" id="accountLoginPin" class="room-code-input" maxlength="6" inputmode="numeric" placeholder="PIN">
+        <span class="setting-label">Password</span>
+        <input type="password" id="accountLoginPass" class="room-code-input" maxlength="64" placeholder="Password" autocomplete="current-password">
       </div>
     </div>
-    <button class="menu-btn alt" onclick="Account.loginPin()"><span class="btn-ico">🔑</span>Log In</button>
+    <button class="menu-btn alt" onclick="Account.login()"><span class="btn-ico">🔑</span>Log In</button>
     <button class="menu-btn ghost" onclick="Account.continueAsGuest()">Continue as Guest ▸</button>
   </div>
 

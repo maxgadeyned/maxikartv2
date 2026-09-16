@@ -1,9 +1,7 @@
-/* Session tokens + Google ID token verify (no extra npm deps) */
+/* Session tokens (HMAC) */
 const crypto = require('crypto');
-const https = require('https');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'maxikart-dev-secret-change-me';
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 60; // 60 days
 
 function b64url(buf) {
@@ -41,52 +39,6 @@ function verifySession(token) {
   }
 }
 
-function httpsGetJson(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (c) => { data += c; });
-      res.on('end', () => {
-        try {
-          resolve({ status: res.statusCode, json: JSON.parse(data) });
-        } catch (e) {
-          reject(e);
-        }
-      });
-    }).on('error', reject);
-  });
-}
-
-async function verifyGoogleIdToken(idToken) {
-  if (!GOOGLE_CLIENT_ID) {
-    const err = new Error('google-disabled');
-    err.code = 'google-disabled';
-    throw err;
-  }
-  if (!idToken) {
-    const err = new Error('missing-token');
-    err.code = 'missing-token';
-    throw err;
-  }
-  const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken);
-  const { status, json } = await httpsGetJson(url);
-  if (status !== 200 || !json || !json.sub) {
-    const err = new Error('bad-google-token');
-    err.code = 'bad-google-token';
-    throw err;
-  }
-  if (json.aud !== GOOGLE_CLIENT_ID) {
-    const err = new Error('bad-google-aud');
-    err.code = 'bad-google-aud';
-    throw err;
-  }
-  return {
-    sub: json.sub,
-    email: json.email || null,
-    name: json.name || json.given_name || null
-  };
-}
-
 function readBearer(req) {
   const h = req.headers.authorization || '';
   if (h.startsWith('Bearer ')) return h.slice(7).trim();
@@ -94,9 +46,7 @@ function readBearer(req) {
 }
 
 module.exports = {
-  GOOGLE_CLIENT_ID,
   signSession,
   verifySession,
-  verifyGoogleIdToken,
   readBearer
 };

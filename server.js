@@ -14,7 +14,7 @@ const Auth = require('./auth');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-auth1';
+const BUILD = 'sio-auth2';
 
 const app = express();
 app.use(express.json({ limit: '32kb' }));
@@ -29,9 +29,7 @@ app.get('/version', (_req, res) => res.json({
 app.get('/api/config', (_req, res) => {
   res.json({
     ok: true,
-    build: BUILD,
-    googleClientId: Auth.GOOGLE_CLIENT_ID || null,
-    googleEnabled: !!Auth.GOOGLE_CLIENT_ID
+    build: BUILD
   });
 });
 
@@ -48,20 +46,9 @@ app.get('/api/me', (req, res) => {
   res.json({ ok: true, user: Store.publicUser(user) });
 });
 
-app.post('/api/auth/google', async (req, res) => {
-  try {
-    const profile = await Auth.verifyGoogleIdToken(req.body && req.body.credential);
-    const user = Store.upsertGoogleUser(profile);
-    const token = Auth.signSession(user.id);
-    res.json({ ok: true, token, user: Store.publicUser(user) });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.code || e.message || 'google-failed' });
-  }
-});
-
 app.post('/api/auth/register', (req, res) => {
   try {
-    const user = Store.createPinUser(req.body && req.body.name, req.body && req.body.pin);
+    const user = Store.createUser(req.body && req.body.name, req.body && req.body.password);
     const token = Auth.signSession(user.id);
     res.json({ ok: true, token, user: Store.publicUser(user) });
   } catch (e) {
@@ -71,7 +58,7 @@ app.post('/api/auth/register', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   try {
-    const user = Store.loginPinUser(req.body && req.body.name, req.body && req.body.pin);
+    const user = Store.loginUser(req.body && req.body.name, req.body && req.body.password);
     const token = Auth.signSession(user.id);
     res.json({ ok: true, token, user: Store.publicUser(user) });
   } catch (e) {
