@@ -82,6 +82,36 @@ function sanitizeName(name) {
     .slice(0, 12) || 'RACER';
 }
 
+function isHexColor(v) {
+  return typeof v === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+}
+
+const ALLOWED_FINISH = new Set(['matte', 'gloss', 'metallic', 'chrome']);
+
+/** Sanitize cosmetic look payload from clients (visual fields only). */
+function sanitizeLook(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const sx = num(src.bodyScale && src.bodyScale.x) ? src.bodyScale.x : 1;
+  const sy = num(src.bodyScale && src.bodyScale.y) ? src.bodyScale.y : 1;
+  const sz = num(src.bodyScale && src.bodyScale.z) ? src.bodyScale.z : 1;
+  return {
+    bodyColor: isHexColor(src.bodyColor) ? src.bodyColor : '#228b7a',
+    finish: ALLOWED_FINISH.has(src.finish) ? src.finish : 'matte',
+    glow: isHexColor(src.glow) ? src.glow : '#37c6b0',
+    wheelColor: isHexColor(src.wheelColor) ? src.wheelColor : '#111111',
+    driverHelmet: isHexColor(src.driverHelmet) ? src.driverHelmet : '#374151',
+    accentColor: isHexColor(src.accentColor) ? src.accentColor : null,
+    bodyScale: {
+      x: clamp(sx, 0.7, 1.35),
+      y: clamp(sy, 0.7, 1.35),
+      z: clamp(sz, 0.7, 1.35)
+    },
+    decalSpoiler: !!src.decalSpoiler,
+    decalStripes: !!src.decalStripes,
+    decalGlowRing: !!src.decalGlowRing
+  };
+}
+
 /**
  * Validate + sanitize a state packet.
  * @returns {{ ok: true, packet: object } | { ok: false, kick: boolean, reason: string }}
@@ -293,5 +323,6 @@ module.exports = {
   validateState,
   onRaceStart,
   onLobby,
-  MAX_STRIKES
+  MAX_STRIKES,
+  sanitizeLook
 };

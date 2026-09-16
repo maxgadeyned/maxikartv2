@@ -12,7 +12,7 @@ const AC = require('./anticheat');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-ac1';
+const BUILD = 'sio-look1';
 
 const app = express();
 app.use(express.static(__dirname));
@@ -61,7 +61,8 @@ function roster(room) {
       name: p.name,
       slot: p.slot,
       host: p.host,
-      ready: p.ready
+      ready: p.ready,
+      look: p.look || null
     }));
 }
 
@@ -162,6 +163,7 @@ io.on('connection', (socket) => {
     if (msg.t === 'create') {
       if (socket.data.mkCode) leave(socket, 'recreate');
       const name = AC.sanitizeName(msg.name);
+      const look = AC.sanitizeLook(msg.look);
       const code = makeCode();
       /** @type {Room} */
       const room = {
@@ -172,7 +174,7 @@ io.on('connection', (socket) => {
         racing: false
       };
       room.players.set(socket.id, {
-        id: socket.id, name, slot: 0, host: true, ready: false
+        id: socket.id, name, slot: 0, host: true, ready: false, look
       });
       rooms.set(code, room);
       socket.data.mkCode = code;
@@ -212,8 +214,9 @@ io.on('connection', (socket) => {
         return;
       }
       const name = AC.sanitizeName(msg.name);
+      const look = AC.sanitizeLook(msg.look);
       room.players.set(socket.id, {
-        id: socket.id, name, slot, host: false, ready: false
+        id: socket.id, name, slot, host: false, ready: false, look
       });
       socket.data.mkCode = code;
       socket.data.ac = AC.createTracker();
@@ -244,6 +247,13 @@ io.on('connection', (socket) => {
 
     if (msg.t === 'rename') {
       me.name = AC.sanitizeName(msg.name);
+      pushRoster(room);
+      return;
+    }
+
+    if (msg.t === 'look') {
+      if (room.racing) return;
+      me.look = AC.sanitizeLook(msg.look);
       pushRoster(room);
       return;
     }

@@ -1929,6 +1929,100 @@ window.addEventListener('keyup', (e) => {
     return g;
   }
 
+  /** Full cosmetic kart for online remotes — same visual language as the local player. */
+  function makeCustomKart(look) {
+    const L = look || {};
+    const g = new THREE.Group();
+    const finish = L.finish || 'matte';
+    let roughness = 0.4, metalness = 0.1;
+    if (finish === 'matte') { roughness = 0.9; metalness = 0; }
+    else if (finish === 'gloss') { roughness = 0.1; metalness = 0.1; }
+    else if (finish === 'metallic') { roughness = 0.3; metalness = 0.8; }
+    else if (finish === 'chrome') { roughness = 0.05; metalness = 1.0; }
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: L.bodyColor || '#228b7a', roughness, metalness, emissive: 0xffffff, emissiveIntensity: 0
+    });
+    const body = new THREE.Group();
+    const hull = new THREE.Mesh(createRacingChassisGeometry(), bodyMat);
+    hull.castShadow = true; hull.receiveShadow = true; body.add(hull);
+    [-1, 1].forEach(side => {
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 1.15, 10), bodyMat);
+      pod.rotation.x = Math.PI / 2;
+      pod.position.set(side * 0.72, 0.28, -0.15);
+      pod.castShadow = true;
+      body.add(pod);
+    });
+    const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.05, 0.35), bodyMat);
+    splitter.position.set(0, 0.1, 1.28);
+    body.add(splitter);
+    body.position.y = 0.22;
+    const bs = L.bodyScale || { x: 1, y: 1, z: 1 };
+    body.scale.set(bs.x || 1, bs.y || 1, bs.z || 1);
+    g.add(body);
+
+    const cockpitMat = new THREE.MeshStandardMaterial({ color: 0x1c1e24, roughness: 0.55 });
+    const cockpit = new THREE.Group();
+    const cockpitPod = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.54, 0.34, 8), cockpitMat);
+    cockpit.add(cockpitPod);
+    const windshield = new THREE.Mesh(
+      new THREE.BoxGeometry(0.78, 0.32, 0.04),
+      new THREE.MeshStandardMaterial({ color: 0x1c2a33, roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.55 })
+    );
+    windshield.position.set(0, 0.18, 0.38); windshield.rotation.x = -0.55; cockpit.add(windshield);
+    cockpit.position.set(0, 0.78, -0.15); g.add(cockpit);
+
+    const shoulders = new THREE.Mesh(
+      new THREE.BoxGeometry(0.46, 0.22, 0.32),
+      new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.5 })
+    );
+    shoulders.position.set(0, 0.93, -0.12); g.add(shoulders);
+
+    const wheelMat = new THREE.MeshStandardMaterial({ color: L.wheelColor || '#111111' });
+    [[-0.85, 0.35, 1.0], [0.85, 0.35, 1.0], [-0.85, 0.35, -1.0], [0.85, 0.35, -1.0]].forEach(([x, y, z]) => {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16), wheelMat);
+      w.rotation.z = Math.PI / 2; w.position.set(x, y, z); w.castShadow = true; g.add(w);
+    });
+
+    const helm = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 14, 10),
+      new THREE.MeshStandardMaterial({ color: L.driverHelmet || '#374151', roughness: 0.4 })
+    );
+    helm.position.set(0, 1.02, -0.12); helm.castShadow = true; g.add(helm);
+    const visor = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.11, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0x0e0f12, roughness: 0.1 })
+    );
+    visor.position.set(0, 1.02, 0.06); g.add(visor);
+
+    if (L.decalSpoiler) {
+      const spoiler = new THREE.Group();
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.3), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }));
+      wing.position.set(0, 1.05, -1.25); spoiler.add(wing);
+      [-0.6, 0.6].forEach(sx => {
+        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        strut.position.set(sx, 0.78, -1.25); spoiler.add(strut);
+      });
+      g.add(spoiler);
+    }
+    if (L.decalStripes) {
+      const stripeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+      [-0.22, 0.22].forEach(sx => {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 1.35), stripeMat);
+        stripe.position.set(sx, 0.72, 0.55); g.add(stripe);
+      });
+    }
+
+    const glowCol = L.accentColor || L.glow || '#37c6b0';
+    const glow = new THREE.PointLight(glowCol, L.decalGlowRing ? 2.5 : 2, L.decalGlowRing ? 5.2 : 4);
+    glow.position.set(0, 0.2, 0); g.add(glow);
+
+    g.userData.bodyMat = bodyMat;
+    g.visible = true;
+    scene.add(g);
+    return g;
+  }
+
   function clearAIRacers() {
     aiRacers.forEach(ai => { scene.remove(ai.mesh); });
     aiRacers.length = 0;
@@ -1944,11 +2038,9 @@ window.addEventListener('keyup', (e) => {
     if (!window.Net || !Net.isOnline()) return;
     const players = Net.getPlayers().filter(p => !p.you);
     players.forEach((p, i) => {
-      const color = NET_COLORS[(p.slot) % NET_COLORS.length];
-      const mesh = makeAIKart(color);
-      mesh.visible = true;
+      const mesh = makeCustomKart(p.look);
       netRemotes.push({
-        id: p.id, name: p.name, slot: p.slot, color, mesh,
+        id: p.id, name: p.name, slot: p.slot, look: p.look || null, mesh,
         pos: new THREE.Vector3(), heading: 0, hopOffset: 0,
         lap: 1, finished: false, finishTime: null, place: i + 2
       });

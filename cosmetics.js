@@ -284,6 +284,7 @@ function equipItem(id) {
   delete settings.vehicleClass;
   refreshSetBonus();
   if (window.applyCustomization) window.applyCustomization();
+  if (window.Net && Net.syncLook) Net.syncLook();
   return true;
 }
 
@@ -304,6 +305,29 @@ function applyEquippedToSettings() {
   delete settings.vehicleClass;
   refreshSetBonus();
 }
+
+/** Compact visual snapshot for multiplayer (looks only — no gameplay stats). */
+function getNetworkLook() {
+  applyEquippedToSettings();
+  const bs = settings.bodyScale || { x: 1, y: 1, z: 1 };
+  return {
+    bodyColor: String(settings.bodyColor || '#228b7a').slice(0, 16),
+    finish: ['matte', 'gloss', 'metallic', 'chrome'].includes(settings.finish) ? settings.finish : 'matte',
+    glow: String(settings.glow || '#37c6b0').slice(0, 16),
+    wheelColor: String(settings.wheelColor || '#111111').slice(0, 16),
+    driverHelmet: String(settings.driverHelmet || '#374151').slice(0, 16),
+    accentColor: settings.accentColor ? String(settings.accentColor).slice(0, 16) : null,
+    bodyScale: {
+      x: Math.max(0.7, Math.min(1.35, +bs.x || 1)),
+      y: Math.max(0.7, Math.min(1.35, +bs.y || 1)),
+      z: Math.max(0.7, Math.min(1.35, +bs.z || 1))
+    },
+    decalSpoiler: !!settings.decalSpoiler,
+    decalStripes: !!settings.decalStripes,
+    decalGlowRing: !!settings.decalGlowRing
+  };
+}
+
 applyEquippedToSettings();
 if (window.applyCustomization) window.applyCustomization();
 
@@ -313,5 +337,5 @@ window.Cosmetics = {
   isOwned, isEquipped, equipItem, grantItem,
   itemsByCategory: (cat) => ITEM_CATALOG.filter(i => i.category === cat),
   getActiveSet, refreshSetBonus, anyMythicEquipped,
-  getSetProgress, renderSetsPanel
+  getSetProgress, renderSetsPanel, getNetworkLook
 };

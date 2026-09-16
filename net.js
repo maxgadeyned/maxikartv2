@@ -100,7 +100,8 @@
     Net.players.clear();
     (players || []).forEach(p => {
       Net.players.set(p.id, {
-        id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready
+        id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready,
+        look: p.look || null
       });
     });
     emitLobby();
@@ -184,8 +185,16 @@
       .sort((a, b) => a.slot - b.slot)
       .map(p => ({
         id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready,
+        look: p.look || null,
         you: p.id === Net.localId
       }));
+  }
+
+  function currentLook() {
+    if (window.Cosmetics && typeof window.Cosmetics.getNetworkLook === 'function') {
+      return window.Cosmetics.getNetworkLook();
+    }
+    return null;
   }
 
   function send(obj) {
@@ -388,7 +397,7 @@
     Net.localName = playerName();
     showLobbyShell(true, '----');
     connectSocket()
-      .then(() => send({ t: 'create', name: Net.localName }))
+      .then(() => send({ t: 'create', name: Net.localName, look: currentLook() }))
       .catch(() => {
         alert('Could not reach the game server.\n\nWait for Render to finish deploying, hard-refresh (Ctrl+F5), then try again.\n\nLocal: use START MAXIKART.bat → http://127.0.0.1:8765');
         leave();
@@ -413,7 +422,7 @@
     }
     showLobbyShell(false, clean);
     connectSocket()
-      .then(() => send({ t: 'join', code: clean, name: Net.localName }))
+      .then(() => send({ t: 'join', code: clean, name: Net.localName, look: currentLook() }))
       .catch(() => {
         alert('Could not reach the game server. Open the same Render/local URL as the host.');
         leave();
@@ -432,7 +441,16 @@
     const p = Net.players.get(Net.localId);
     if (p) p.name = name;
     send({ t: 'rename', name });
+    send({ t: 'look', look: currentLook() });
     emitLobby();
+  }
+
+  function syncLook() {
+    if (!Net.role) return;
+    const look = currentLook();
+    const p = Net.players.get(Net.localId);
+    if (p) p.look = look;
+    send({ t: 'look', look });
   }
 
   function setReady(ready) {
@@ -494,7 +512,7 @@
   }
 
   window.Net = {
-    hostRoom, joinRoom, leave, startRace, setLocalName, toggleReady, setReady,
+    hostRoom, joinRoom, leave, startRace, setLocalName, toggleReady, setReady, syncLook,
     pushLocalState, getRemoteStates: () => Net.remoteStates, getPlayers,
     getLocalSlot: () => {
       const p = Net.players.get(Net.localId);
