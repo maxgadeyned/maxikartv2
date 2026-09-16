@@ -1,0 +1,18 @@
+{
+  "name": "maxikartv2",
+  "version": "2.0.0",
+  "description": "MAXIKART — local + online kart racing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "ws": "^8.21.3"
+  }
+}

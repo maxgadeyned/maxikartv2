@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAXIKART</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@500;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="coinChip" class="coin-chip">🪙 <span class="coin-value">0</span></div>
+
+<!-- ============ MAIN MENU ============ -->
+<div id="menu-main" class="menu-overlay active">
+  <div class="menu-flag-strip" aria-hidden="true"></div>
+  <div class="menu-title" data-text="MAXIKART">MAXIKART</div>
+  <div class="menu-subtitle">Arcade Racing Prototype</div>
+  <button class="menu-btn" onclick="playUIChime(); navTo('menu-single')"><span class="btn-ico">🏁</span>Single Player</button>
+  <button class="menu-btn" onclick="playUIChime(); navTo('menu-multi')"><span class="btn-ico">🌐</span>Multiplayer</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-garage')"><span class="btn-ico">🔧</span>Garage</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-loot')"><span class="btn-ico">🎁</span>Loot Box</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-daily')"><span class="btn-ico">📅</span>Daily Rewards</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-leaderboard')"><span class="btn-ico">🏆</span>Leaderboards</button>
+  <button class="menu-btn alt" onclick="playUIChime(); openSettings()"><span class="btn-ico">⚙</span>Settings</button>
+</div>
+
+<!-- ============ SINGLE PLAYER ============ -->
+<div id="menu-single" class="menu-overlay">
+  <div class="menu-title small">SINGLE PLAYER</div>
+  <button class="menu-btn" onclick="playUIChime(); navTo('menu-tt-track')"><span class="btn-ico">⏱</span>Time Trial</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-free-setup')"><span class="btn-ico">🚗</span>Free Drive</button>
+  <button class="menu-btn alt" onclick="playUIChime(); startGame('multiplayer')"><span class="btn-ico">🤖</span>Local vs AI</button>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+</div>
+
+<!-- ============ FREE DRIVE SETUP ============ -->
+<div id="menu-free-setup" class="menu-overlay">
+  <div class="menu-title small">FREE DRIVE</div>
+  <div class="settings-grid single-col">
+    <div class="setting-row full">
+      <span class="setting-label">Track</span>
+      <div class="map-selector">
+        <button class="map-btn" onclick="playUIChime(); cycleMap(-1)">◀</button>
+        <div class="map-name" id="freeMapDisplay">NEON LABYRINTH</div>
+        <button class="map-btn" onclick="playUIChime(); cycleMap(1)">▶</button>
+      </div>
+    </div>
+    <div class="setting-row full">
+      <span class="setting-label">Night Mode</span>
+      <label class="switch"><input type="checkbox" id="setup-night-free" onchange="toggleSetting('night', this.checked)"><span class="slider"></span></label>
+    </div>
+    <div class="setting-row full">
+      <span class="setting-label">Weather</span>
+      <div class="map-selector">
+        <button class="map-btn" onclick="playUIChime(); cycleWeather(-1)">◀</button>
+        <div class="map-name weather-display">CLEAR</div>
+        <button class="map-btn" onclick="playUIChime(); cycleWeather(1)">▶</button>
+      </div>
+    </div>
+  </div>
+  <button class="menu-btn" onclick="playUIChime(); startGame('free')"><span class="btn-ico">🏎</span>START ENGINE</button>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-single')">◂ Back</button>
+</div>
+
+<!-- ============ MULTIPLAYER ============ -->
+<div id="menu-multi" class="menu-overlay">
+  <div class="menu-title small">MULTIPLAYER</div>
+  <p class="net-blurb">Open this site from the game server (local bat or your Render URL). Host creates a room code; friends open the <b>same site</b> and join. No tunnels, no PeerJS.</p>
+  <button class="menu-btn" onclick="playUIChime(); Net.hostRoom();"><span class="btn-ico">🏠</span>Host Room</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-join')"><span class="btn-ico">🔑</span>Join Room</button>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+</div>
+
+<!-- ============ JOIN ROOM ============ -->
+<div id="menu-join" class="menu-overlay">
+  <div class="menu-title small">JOIN ROOM</div>
+  <div class="settings-grid single-col">
+    <div class="setting-row full center">
+      <input type="text" id="joinPlayerName" class="room-code-input" maxlength="12" placeholder="YOUR NAME" style="text-transform:uppercase; margin-bottom: 12px;" onchange="localStorage.setItem('kartPlayerName', this.value.toUpperCase());">
+    </div>
+    <div class="setting-row full center">
+      <input type="text" id="joinRoomCode" class="room-code-input" maxlength="4" placeholder="ROOM CODE" style="text-transform:uppercase; letter-spacing: 0.25em;">
+    </div>
+  </div>
+  <button class="menu-btn" onclick="playUIChime(); const n=document.getElementById('joinPlayerName'); if(n&&n.value) localStorage.setItem('kartPlayerName', n.value.toUpperCase()); Net.joinRoom(document.getElementById('joinRoomCode').value);"><span class="btn-ico">🔌</span>Connect</button>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-multi')">◂ Back</button>
+</div>
+
+<!-- ============ ONLINE LOBBY ============ -->
+<div id="menu-lobby" class="menu-overlay">
+  <div class="menu-title small">ROOM LOBBY</div>
+  <div class="net-code-display">
+    <div class="net-code-label">Room Code</div>
+    <div class="net-code-value" id="netRoomCode">----</div>
+    <div class="net-ping-line">Ping <span id="netPing">—</span></div>
+  </div>
+  <div class="net-lobby-status" id="netLobbyStatus">Connecting…</div>
+  <div class="net-player-list" id="netPlayerList"></div>
+
+  <div id="lobbyHostSettings" class="lobby-settings" style="display:none;">
+    <div class="setup-section-title" style="margin-bottom:10px;">Race Settings</div>
+    <div class="lobby-settings-grid">
+      <div class="setting-row">
+        <span class="setting-label">Your Name</span>
+        <input type="text" id="lobbyHostName" class="room-code-input lobby-name-input" maxlength="12" placeholder="RACER" onchange="Net.setLocalName(this.value);">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Track</span>
+        <div class="map-selector lobby-map-selector">
+          <button class="map-btn" onclick="playUIChime(); cycleMap(-1); Net.syncLobbySettings();">◀</button>
+          <div class="map-name" id="lobbyMapDisplay">NEON LABYRINTH</div>
+          <button class="map-btn" onclick="playUIChime(); cycleMap(1); Net.syncLobbySettings();">▶</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Laps</span>
+        <div class="lap-selector">
+          <button class="lap-btn" id="btn-lap-1-lobby" onclick="playUIChime(); setLaps(1); Net.syncLobbySettings();">1</button>
+          <button class="lap-btn active" id="btn-lap-3-lobby" onclick="playUIChime(); setLaps(3); Net.syncLobbySettings();">3</button>
+          <button class="lap-btn" id="btn-lap-5-lobby" onclick="playUIChime(); setLaps(5); Net.syncLobbySettings();">5</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Item Boxes</span>
+        <label class="switch"><input type="checkbox" id="setup-items" onchange="toggleSetting('items', this.checked); Net.syncLobbySettings();"><span class="slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Night Mode</span>
+        <label class="switch"><input type="checkbox" id="setup-night-lobby" onchange="toggleSetting('night', this.checked); Net.syncLobbySettings();"><span class="slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Weather</span>
+        <div class="map-selector lobby-map-selector">
+          <button class="map-btn" onclick="playUIChime(); cycleWeather(-1); Net.syncLobbySettings();">◀</button>
+          <div class="map-name weather-display" id="lobbyWeatherDisplay">CLEAR</div>
+          <button class="map-btn" onclick="playUIChime(); cycleWeather(1); Net.syncLobbySettings();">▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lobbyGuestSummary" class="lobby-guest-summary" style="display:none;">
+    Host is setting up the race…
+    <div id="lobbyGuestConfig" class="lobby-guest-config"></div>
+  </div>
+
+  <button class="menu-btn alt" id="netReadyBtn" onclick="playUIChime(); Net.toggleReady();">READY UP</button>
+  <button class="menu-btn" id="netStartBtn" onclick="playUIChime(); Net.startRace();"><span class="btn-ico">🏁</span>START RACE</button>
+  <button class="menu-btn ghost" onclick="playUIChime(); Net.leave(); navTo('menu-multi')">◂ Leave Room</button>
+</div>
+
+<!-- ============ TIME TRIAL — 1) PICK TRACK ============ -->
+<div id="menu-tt-track" class="menu-overlay setup-overlay">
+  <div class="setup-shell">
+    <header class="setup-topbar">
+      <button class="garage-back" onclick="playUIChime(); navTo('menu-single')">◂ Back</button>
+      <div class="menu-title small garage-title">PICK TRACK</div>
+      <div class="setup-step">Step 1 / 2</div>
+    </header>
+    <div class="track-pick-grid" id="ttTrackGrid">
+      <button type="button" class="track-card" data-map="0" onclick="playUIChime(); selectMap(0)">
+        <div class="track-card-name">NEON LABYRINTH</div>
+        <div class="track-card-tag">Tight · Technical</div>
+      </button>
+      <button type="button" class="track-card" data-map="1" onclick="playUIChime(); selectMap(1)">
+        <div class="track-card-name">TIBURTINA SPRINT</div>
+        <div class="track-card-tag">Wide · Fast</div>
+      </button>
+      <button type="button" class="track-card" data-map="2" onclick="playUIChime(); selectMap(2)">
+        <div class="track-card-name">KNOT CIRCUIT</div>
+        <div class="track-card-tag">Elevation · Commitment</div>
+      </button>
+      <button type="button" class="track-card" data-map="3" onclick="playUIChime(); selectMap(3)">
+        <div class="track-card-name">RIDGE RUN</div>
+        <div class="track-card-tag">Heights · Shortcuts</div>
+      </button>
+    </div>
+    <div class="setup-actions">
+      <button class="menu-btn" onclick="playUIChime(); refreshTTOptionsSummary(); navTo('menu-tt-options')"><span class="btn-ico">▶</span>Next — Race Options</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TIME TRIAL — 2) RACE OPTIONS ============ -->
+<div id="menu-tt-options" class="menu-overlay setup-overlay">
+  <div class="setup-shell">
+    <header class="setup-topbar">
+      <button class="garage-back" onclick="playUIChime(); navTo('menu-tt-track')">◂ Track</button>
+      <div class="menu-title small garage-title">RACE OPTIONS</div>
+      <div class="setup-step">Step 2 / 2</div>
+    </header>
+
+    <div class="tt-summary" id="ttSummary">NEON LABYRINTH</div>
+
+    <div class="setup-options-body">
+      <section class="setup-section">
+        <div class="setup-section-title">Laps</div>
+        <div class="lap-selector big-laps">
+          <button class="lap-btn big" id="btn-lap-1" onclick="playUIChime(); setLaps(1)">1</button>
+          <button class="lap-btn big active" id="btn-lap-3" onclick="playUIChime(); setLaps(3)">3</button>
+          <button class="lap-btn big" id="btn-lap-5" onclick="playUIChime(); setLaps(5)">5</button>
+        </div>
+      </section>
+
+      <section class="setup-section">
+        <div class="setup-section-title">Conditions</div>
+        <div class="option-tile-grid">
+          <button type="button" class="option-tile" id="ttNightTile" onclick="playUIChime(); toggleTTOption('night')">
+            <div class="option-tile-label">Night</div>
+            <div class="option-tile-value" id="ttNightValue">OFF</div>
+          </button>
+          <button type="button" class="option-tile" id="ttGhostTile" onclick="playUIChime(); toggleTTOption('ghost')">
+            <div class="option-tile-label">Ghost</div>
+            <div class="option-tile-value" id="ttGhostValue">ON</div>
+          </button>
+          <button type="button" class="option-tile weather-tile" id="ttWeatherTile" onclick="playUIChime(); cycleWeather(1); refreshTTOptionsSummary();">
+            <div class="option-tile-label">Weather</div>
+            <div class="option-tile-value weather-display" id="ttWeatherValue">CLEAR</div>
+            <div class="option-tile-hint">Tap to cycle</div>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="setup-actions">
+      <button class="menu-btn" onclick="playUIChime(); startGame('timed')"><span class="btn-ico">🏁</span>START TIME TRIAL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GARAGE ============ -->
+<div id="menu-garage" class="menu-overlay garage-overlay">
+  <div class="garage-shell">
+    <header class="garage-topbar">
+      <button class="garage-back" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+      <div class="menu-title small garage-title">GARAGE</div>
+      <div id="setBonusBadge" class="set-bonus-badge" style="display:none;"></div>
+    </header>
+    <div class="garage-layout">
+      <div class="garage-preview">
+        <canvas id="garageCanvas"></canvas>
+        <div class="garage-preview-hint">Drag to rotate</div>
+      </div>
+      <div class="garage-panel">
+        <div class="garage-tabs" id="garageTabs"></div>
+        <div class="garage-grid" id="garageGrid"></div>
+        <div class="garage-sets-wrap">
+          <div class="garage-sets-label">Sets</div>
+          <div id="garageSetsPanel" class="garage-sets-panel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DAILY REWARDS ============ -->
+<div id="menu-daily" class="menu-overlay">
+  <div class="menu-title small">DAILY REWARDS</div>
+  <div id="dailyStreak" class="daily-streak">Streak: 0 days</div>
+  <div class="daily-card">
+    <div class="daily-card-title">Login Bonus</div>
+    <div id="dailyLoginStatus" class="daily-status">Ready to claim</div>
+    <button class="menu-btn" id="dailyLoginBtn" onclick="playUIChime(); Economy.claimDailyLogin()">Claim Daily Login</button>
+  </div>
+  <div class="daily-card">
+    <div class="daily-card-title">Daily Challenge</div>
+    <div id="dailyChallengeText" class="daily-challenge">Finish any Time Trial</div>
+    <div id="dailyChallengeStatus" class="daily-status">In progress</div>
+  </div>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+</div>
+
+<!-- ============ LEADERBOARDS ============ -->
+<div id="menu-leaderboard" class="menu-overlay">
+  <div class="menu-title small">LEADERBOARDS</div>
+  <div class="settings-grid single-col">
+    <div class="setting-row full">
+      <span class="setting-label">Your Name</span>
+      <input type="text" id="lbPlayerName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+    </div>
+    <div class="setting-row full">
+      <span class="setting-label">Track</span>
+      <select id="lbMapSelect" class="lb-select" onchange="Leaderboards.render()">
+        <option value="neon">NEON LABYRINTH</option>
+        <option value="tiburtina">TIBURTINA SPRINT</option>
+        <option value="knot">KNOT CIRCUIT</option>
+        <option value="ridge">RIDGE RUN</option>
+      </select>
+    </div>
+    <div class="setting-row full">
+      <span class="setting-label">Laps</span>
+      <select id="lbLapSelect" class="lb-select" onchange="Leaderboards.render()">
+        <option value="1">1</option>
+        <option value="3" selected>3</option>
+        <option value="5">5</option>
+      </select>
+    </div>
+  </div>
+  <div id="lbList" class="lb-list"></div>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+</div>
+
+<!-- ============ LOOT BOX ============ -->
+<div id="menu-loot" class="menu-overlay">
+  <div class="menu-title small">LOOT BOX</div>
+  <div class="loot-coin-badge">🪙 <span class="coin-value">0</span></div>
+  <div id="pityCounter" class="pity-counter">Pity: 0/10</div>
+  <div class="loot-box-stage">
+    <div class="loot-box-icon" id="lootBoxIcon">📦</div>
+    <div class="loot-reveal" id="lootReveal">
+      <div class="reveal-rarity" id="revealRarity"></div>
+      <div class="reveal-swatch" id="revealSwatch"></div>
+      <div class="reveal-name" id="revealName"></div>
+      <div class="reveal-dupe" id="revealDupe"></div>
+    </div>
+  </div>
+  <div class="loot-odds">Common 38% · Uncommon 24% · Rare 18% · Epic 12% · Legendary 6% · Mythic 2%<br>Guaranteed Rare+ every 10 opens · Prefer fills missing categories · New Accent slot</div>
+  <button class="menu-btn" id="lootOpenBtn" onclick="playUIChime(); Economy.openBoxUI()">Open Loot Box — <span id="lootBoxPrice">150</span> 🪙</button>
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="menu-settings" class="menu-overlay">
+  <div class="menu-title small">SETTINGS</div>
+  <div id="bindWarningText"></div>
+  <div class="settings-grid">
+    <div class="setting-row"><span class="setting-label">Accelerate</span><div class="keybind-btn" id="bind-accel" onclick="listenForBind('accel')">W</div></div>
+    <div class="setting-row"><span class="setting-label">Brake / Rev</span><div class="keybind-btn" id="bind-brake" onclick="listenForBind('brake')">S</div></div>
+    <div class="setting-row"><span class="setting-label">Steer Left</span><div class="keybind-btn" id="bind-left" onclick="listenForBind('left')">A</div></div>
+    <div class="setting-row"><span class="setting-label">Steer Right</span><div class="keybind-btn" id="bind-right" onclick="listenForBind('right')">D</div></div>
+    <div class="setting-row"><span class="setting-label">Hop / Drift</span><div class="keybind-btn" id="bind-drift" onclick="listenForBind('drift')">SPACE</div></div>
+    <div class="setting-row"><span class="setting-label">Use Item</span><div class="keybind-btn" id="bind-item" onclick="listenForBind('item')">E</div></div>
+    <div class="setting-row"><span class="setting-label">Toggle Cam</span><div class="keybind-btn" id="bind-cam" onclick="listenForBind('cam')">F</div></div>
+    <div class="setting-row"><span class="setting-label">Look Behind</span><div class="keybind-btn" id="bind-rear" onclick="listenForBind('rear')">B</div></div>
+    <div class="setting-row"><span class="setting-label">Quick Restart</span><div class="keybind-btn" id="bind-restart" onclick="listenForBind('restart')">R</div></div>
+    <div class="setting-row">
+      <span class="setting-label">Master Sound</span>
+      <label class="switch"><input type="checkbox" id="toggle-sound" onchange="toggleSetting('sound', this.checked)"><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="settings-section-label">Sound Volumes</div>
+  <div class="settings-grid volume-grid">
+    <div class="setting-row full vol-row">
+      <span class="setting-label">Master</span>
+      <input type="range" class="vol-slider" id="vol-master" min="0" max="100" value="100" oninput="setVolume('master', this.value)">
+      <span class="vol-pct" id="vol-master-pct">100%</span>
+    </div>
+    <div class="setting-row full vol-row">
+      <span class="setting-label">Engine</span>
+      <input type="range" class="vol-slider" id="vol-engine" min="0" max="100" value="100" oninput="setVolume('engine', this.value)">
+      <span class="vol-pct" id="vol-engine-pct">100%</span>
+    </div>
+    <div class="setting-row full vol-row">
+      <span class="setting-label">Skids / Drift</span>
+      <input type="range" class="vol-slider" id="vol-skid" min="0" max="100" value="100" oninput="setVolume('skid', this.value)">
+      <span class="vol-pct" id="vol-skid-pct">100%</span>
+    </div>
+    <div class="setting-row full vol-row">
+      <span class="setting-label">UI / Menus</span>
+      <input type="range" class="vol-slider" id="vol-ui" min="0" max="100" value="100" oninput="setVolume('ui', this.value)">
+      <span class="vol-pct" id="vol-ui-pct">100%</span>
+    </div>
+    <div class="setting-row full vol-row">
+      <span class="setting-label">Race SFX</span>
+      <input type="range" class="vol-slider" id="vol-sfx" min="0" max="100" value="100" oninput="setVolume('sfx', this.value)">
+      <span class="vol-pct" id="vol-sfx-pct">100%</span>
+    </div>
+    <div class="setting-row full vol-row">
+      <span class="setting-label">Crowd / Ambience</span>
+      <input type="range" class="vol-slider" id="vol-ambience" min="0" max="100" value="100" oninput="setVolume('ambience', this.value)">
+      <span class="vol-pct" id="vol-ambience-pct">100%</span>
+    </div>
+  </div>
+  <button class="menu-btn ghost" onclick="playUIChime(); closeSettings()">Save &amp; Close</button>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="menu-pause" class="menu-overlay">
+  <div class="menu-title small">PAUSED</div>
+  <div id="pauseMapInfo" class="pause-map-info"></div>
+  <button class="menu-btn" onclick="playUIChime(); resumeGame()"><span class="btn-ico">▶</span>Resume</button>
+  <button class="menu-btn alt" id="pauseRestartBtn" onclick="playUIChime(); restartRace()">Restart Race</button>
+  <button class="menu-btn alt" onclick="playUIChime(); openSettings()"><span class="btn-ico">⚙</span>Settings</button>
+  <button class="menu-btn danger" onclick="playUIChime(); quitToMenu()"><span class="btn-ico">✕</span>Quit to Menu</button>
+</div>
+
+<!-- ============ FINISH (solo / time trial) ============ -->
+<div id="menu-finish" class="menu-overlay">
+  <div class="menu-title small finish-title">RACE FINISHED</div>
+  <div id="finalTimeDisplay" class="final-time">00:00.00</div>
+  <div id="splitTimesDisplay" class="split-times"></div>
+  <div id="finishBestNote" class="finish-note"></div>
+  <div id="finishLeaderboardNote" class="finish-note lb-finish-note"></div>
+  <div id="finishCoinsEarned" class="finish-coins"></div>
+  <button class="menu-btn" id="finishMainMenuBtn" onclick="playUIChime(); quitToMenu()"><span class="btn-ico">🏠</span>Main Menu</button>
+  <button class="menu-btn alt" id="finishRaceAgainBtn" onclick="playUIChime(); restartRace()"><span class="btn-ico">↺</span>Race Again</button>
+</div>
+
+<!-- ============ MULTIPLAYER RESULTS ============ -->
+<div id="menu-results" class="menu-overlay results-overlay">
+  <div class="menu-title small finish-title results-title">RACE RESULTS</div>
+  <div class="results-subtitle" id="resultsSubtitle">Final standings</div>
+  <div class="results-list" id="resultsList"></div>
+  <button class="menu-btn" id="resultsLobbyBtn" style="display:none;" onclick="playUIChime(); returnToOnlineLobby()"><span class="btn-ico">↩</span>Back to Lobby</button>
+  <button class="menu-btn" id="resultsMenuBtn" style="display:none;" onclick="playUIChime(); quitToMenu()"><span class="btn-ico">🏠</span>Main Menu</button>
+  <button class="menu-btn alt" id="resultsAgainBtn" style="display:none;" onclick="playUIChime(); restartRace()"><span class="btn-ico">↺</span>Race Again</button>
+</div>
+
+<div id="spectateUI" class="spectate-ui" style="display:none;" aria-live="polite">
+  <div class="spectate-chip">FINISHED</div>
+  <div class="spectate-place" id="spectatePlace">1st</div>
+  <div class="spectate-watching">Watching <span id="spectateTargetName">—</span></div>
+  <div class="spectate-hint">Q / E cycle camera · waiting for others…</div>
+</div>
+
+<div id="countdownUI"><div id="countdownText">3</div></div>
+<div id="stage"></div>
+
+<!-- ============ HUD ============ -->
+<div class="hud" id="hud">
+  <div class="top-row">
+    <div class="hud-left-stack">
+      <div class="badge minimap-container"><canvas id="minimap" width="204" height="204"></canvas></div>
+      <div class="minimap-legend" id="minimapLegend">● You &nbsp; ● AI &nbsp; ■ Box</div>
+    </div>
+
+    <div id="timerContainer">
+      <div id="placeContainer" style="display:none;">PLACE <span id="placeVal">1st</span></div>
+      <div id="lapContainer">LAP <span id="lapVal">1/3</span></div>
+      <span id="timerVal" class="timer-value">00:00.00</span>
+      <div class="best">BEST <span id="bestVal">--:--.--</span></div>
+      <div class="net-hud-ping" id="hudNetPingWrap" style="display:none;">NET <span id="hudNetPing">—</span></div>
+    </div>
+
+    <div class="hud-right-stack">
+      <div class="item-slot" id="hudItemSlot" style="display: none;"></div>
+    </div>
+  </div>
+  <div class="bottom-row">
+    <div class="speedo">
+      <span class="value" id="speedVal">0</span><span class="unit">u/s</span>
+      <div class="bar-track"><div class="bar-fill" id="speedBar"></div></div>
+      <div class="boost-badge" id="boostBadge">BOOST LVL 1</div>
+    </div>
+    <div class="badge key-guide" id="hudKeyGuide">ESC Pause · R Restart · F Cam · B Look · E Item</div>
+  </div>
+</div>
+
+<div class="respawn-note" id="cheatNote">⚠ Lap Invalid — Track Cut Detected</div>
+
+<!-- Three.js + Post Processing Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+<script src="game.js"></script>
+<script src="systems.js"></script>
+<script src="cosmetics.js"></script>
+<script src="economy.js"></script>
+<script src="garage.js"></script>
+<script src="net.js"></script>
+</body>
+</html>
