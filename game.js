@@ -396,6 +396,7 @@ function resumeGame() {
 }
 function quitToMenu() {
   onlineMenuOpen = false;
+  clearRaceIntro();
   gameState = 'menu';
   document.getElementById('hud').style.display = 'none';
   hideSpectateUI();
@@ -543,23 +544,12 @@ function startGame(mode) {
   if (coinChip) coinChip.classList.add('in-race');
 
   // --- GRID SPAWN SYSTEM ---
-  const gridPosition = (mode === 'online' && window.Net) ? (Net.getLocalSlot() + 1) : 1;
-  const spacingBack = 20 + (gridPosition - 1) * 15; 
-  let spawnIndex = window.pts.length - spacingBack;
-  if (spawnIndex < 0) spawnIndex = window.pts.length + spawnIndex;
-
-  const spawnPt = window.pts[spawnIndex];
-  const nextPt = window.pts[(spawnIndex + 1) % window.pts.length];
-  
-  const spawnFw = new THREE.Vector3().subVectors(nextPt, spawnPt).normalize();
-  const spawnRight = new THREE.Vector3(spawnFw.z, 0, -spawnFw.x).normalize();
-  const lateralStagger = (gridPosition % 2 === 0) ? -4 : 4; 
-  
-  window.kart.pos.copy(spawnPt).add(spawnRight.multiplyScalar(lateralStagger));
-  window.kart.pos.y += 0.5; 
-  
-  window.trackStartHeading = Math.atan2(spawnFw.x, spawnFw.z);
-  window.kart.heading = window.trackStartHeading;
+  const gridSlot = (mode === 'online' && window.Net) ? Net.getLocalSlot() : 0;
+  const spawn = getGridSpawn(gridSlot);
+  window.kart.pos.copy(spawn.pos);
+  window.trackStartHeading = spawn.heading;
+  window.kart.heading = spawn.heading;
+  if (mode === 'online' && window.placeNetRemotesOnGrid) window.placeNetRemotesOnGrid();
   // -------------------------
   
   if (window.renderer && window.skidTarget) {
@@ -580,8 +570,179 @@ function startGame(mode) {
   const pauseMap = document.getElementById('pauseMapInfo');
   if (pauseMap) pauseMap.textContent = MAPS[activeMapIndex].name + ' · ' + maxLaps + ' LAP' + (maxLaps>1?'S':'');
   updateOnlineRestartUI();
-  if (mode === 'timed' || mode === 'multiplayer' || mode === 'online') { gameState = 'countdown'; startCountdown(); } else { gameState = 'playing'; }
+  if (mode === 'online') {
+    document.getElementById('hud').style.display = 'none';
+    gameState = 'intro';
+    beginRaceIntro();
+  } else if (mode === 'timed' || mode === 'multiplayer') {
+    gameState = 'countdown';
+    startCountdown();
+  } else {
+    gameState = 'playing';
+  }
 }
+
+/** Grid spawn for a 0-based race slot (matches local + remote placement). */
+function getGridSpawn(slot) {
+  const gridPosition = (slot | 0) + 1;
+  const spacingBack = 20 + (gridPosition - 1) * 15;
+  let spawnIndex = window.pts.length - spacingBack;
+  if (spawnIndex < 0) spawnIndex = window.pts.length + spawnIndex;
+  const spawnPt = window.pts[spawnIndex];
+  const nextPt = window.pts[(spawnIndex + 1) % window.pts.length];
+  const spawnFw = new THREE.Vector3().subVectors(nextPt, spawnPt).normalize();
+  const spawnRight = new THREE.Vector3(spawnFw.z, 0, -spawnFw.x).normalize();
+  const lateralStagger = (gridPosition % 2 === 0) ? -4 : 4;
+  const pos = spawnPt.clone().add(spawnRight.multiplyScalar(lateralStagger));
+  pos.y += 0.5;
+  return { pos, heading: Math.atan2(spawnFw.x, spawnFw.z), fw: spawnFw };
+}
+window.getGridSpawn = getGridSpawn;
+
+function clearRaceIntro() {
+  window.raceIntro = null;
+  const ui = document.getElementById('raceIntroUI');
+  if (ui) {
+    ui.style.display = 'none';
+    ui.classList.remove('show', 'hide-out');
+  }
+}
+
+function beginRaceIntro() {
+  clearRaceIntro();
+  if (!window.pts || !window.pts.length) {
+    document.getElementById('hud').style.display = 'flex';
+    gameState = 'countdown';
+    startCountdown();
+    return;
+  }
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, sumY = 0;
+  window.pts.forEach(p => {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    sumY += p.y;
+  });
+  const center = new THREE.Vector3((minX + maxX) * 0.5, sumY / window.pts.length, (minZ + maxZ) * 0.5);
+  const span = Math.max(80, Math.max(maxX - minX, maxZ - minZ));
+  const start = getGridSpawn(0);
+  const weatherLabel = window.RaceKit
+    ? window.RaceKit.getWeather((settings && settings.weather) || 'clear').label
+    : ((settings && settings.weather) || 'clear');
+
+  const mapEl = document.getElementById('raceIntroMapName');
+  const metaEl = document.getElementById('raceIntroMeta');
+  const listEl = document.getElementById('raceIntroRacers');
+  const ui = document.getElementById('raceIntroUI');
+  if (mapEl) mapEl.textContent = MAPS[activeMapIndex].name;
+  if (metaEl) {
+    metaEl.textContent = `${maxLaps} LAP${maxLaps > 1 ? 'S' : ''} · ${String(weatherLabel).toUpperCase()}${settings.night ? ' · NIGHT' : ''}`;
+  }
+  if (listEl) {
+    const players = (window.Net && Net.getPlayers) ? Net.getPlayers() : [];
+    listEl.innerHTML = players.map((p, i) => {
+      const col = (p.look && p.look.bodyColor) || '#37e6c8';
+      return `<div class="race-intro-racer${p.you ? ' you' : ''}" style="--racer-col:${col};animation-delay:${0.28 + i * 0.07}s">
+        <span class="race-intro-swatch"></span>
+        <span class="race-intro-racer-meta">
+          <span class="race-intro-slot">P${(p.slot | 0) + 1}${p.you ? ' · YOU' : ''}</span>
+          <span class="race-intro-name">${p.name || 'RACER'}</span>
+        </span>
+      </div>`;
+    }).join('');
+  }
+  if (ui) {
+    ui.style.display = 'flex';
+    ui.classList.remove('hide-out');
+    void ui.offsetWidth;
+    ui.classList.add('show');
+  }
+
+  window.raceIntro = {
+    t: 0,
+    phase: 'preview',
+    center,
+    radius: span * 0.72,
+    height: Math.max(70, span * 0.28),
+    angle: Math.atan2(window.kart.pos.x - center.x, window.kart.pos.z - center.z) + 0.6,
+    startPos: start.pos.clone(),
+    startHeading: start.heading,
+    previewDur: 4.0,
+    lineupDur: 1.7,
+    povDur: 1.35,
+    snap: true
+  };
+}
+
+function updateRaceIntro(dt) {
+  const ri = window.raceIntro;
+  if (!ri || gameState !== 'intro') return;
+  ri.t += dt;
+
+  const previewEnd = ri.previewDur;
+  const lineupEnd = previewEnd + ri.lineupDur;
+  const povEnd = lineupEnd + ri.povDur;
+
+  if (ri.t < previewEnd) {
+    ri.phase = 'preview';
+    ri.angle += dt * 0.38;
+  } else if (ri.t < lineupEnd) {
+    if (ri.phase !== 'lineup') ri.phase = 'lineup';
+  } else if (ri.t < povEnd) {
+    if (ri.phase !== 'pov') {
+      ri.phase = 'pov';
+      const ui = document.getElementById('raceIntroUI');
+      if (ui) ui.classList.add('hide-out');
+    }
+  } else {
+    clearRaceIntro();
+    document.getElementById('hud').style.display = 'flex';
+    gameState = 'countdown';
+    startCountdown();
+  }
+}
+
+function raceIntroCamera(camera, camTargetPos, camTargetLook) {
+  const ri = window.raceIntro;
+  if (!ri) return false;
+
+  let idealPos, idealLook;
+  if (ri.phase === 'preview') {
+    idealPos = new THREE.Vector3(
+      ri.center.x + Math.sin(ri.angle) * ri.radius,
+      ri.center.y + ri.height,
+      ri.center.z + Math.cos(ri.angle) * ri.radius
+    );
+    idealLook = new THREE.Vector3(ri.center.x, ri.center.y + 6, ri.center.z);
+  } else if (ri.phase === 'lineup') {
+    const fw = new THREE.Vector3(Math.sin(ri.startHeading), 0, Math.cos(ri.startHeading));
+    idealPos = ri.startPos.clone().add(fw.clone().multiplyScalar(-28)).add(new THREE.Vector3(0, 16, 0));
+    idealLook = ri.startPos.clone().add(fw.clone().multiplyScalar(18)).add(new THREE.Vector3(0, 1.5, 0));
+  } else {
+    const followPos = window.kart.pos.clone().add(new THREE.Vector3(0, window.kart.hopOffset, 0));
+    const fw = new THREE.Vector3(Math.sin(window.kart.heading), 0, Math.cos(window.kart.heading));
+    idealPos = followPos.clone().add(fw.clone().multiplyScalar(-4.5)).add(new THREE.Vector3(0, 4.2, 0));
+    idealLook = followPos.clone().add(fw.clone().multiplyScalar(6)).add(new THREE.Vector3(0, 0.5, 0));
+  }
+
+  if (ri.snap) {
+    camTargetPos.copy(idealPos);
+    camTargetLook.copy(idealLook);
+    ri.snap = false;
+  } else {
+    const blend = ri.phase === 'preview' ? 0.1 : (ri.phase === 'lineup' ? 0.07 : 0.14);
+    camTargetPos.lerp(idealPos, blend);
+    camTargetLook.lerp(idealLook, blend + 0.02);
+  }
+
+  camera.position.copy(camTargetPos);
+  camera.lookAt(camTargetLook);
+  return true;
+}
+window.beginRaceIntro = beginRaceIntro;
+window.clearRaceIntro = clearRaceIntro;
+window.updateRaceIntro = updateRaceIntro;
+window.raceIntroCamera = raceIntroCamera;
 
 /** Online: end race UI and bring everyone back to the same room lobby (keep connections). */
 function returnToOnlineLobby() {
@@ -594,6 +755,7 @@ function returnToOnlineLobby() {
 
 function enterOnlineLobbyUI() {
   onlineMenuOpen = false;
+  clearRaceIntro();
   gameState = 'menu';
   document.getElementById('hud').style.display = 'none';
   window.replaying = false;
@@ -627,11 +789,12 @@ function playCountdownBeep(count) {
 }
 
 function startCountdown() {
+  clearRaceIntro();
   const ui = document.getElementById('countdownUI'); const txt = document.getElementById('countdownText');
-  ui.style.display = 'flex'; let count = 3; txt.innerText = count;
+  ui.style.display = 'flex'; let count = 3; txt.innerText = count; txt.style.color = 'var(--ember)';
   playCountdownBeep(count);
   const timer = setInterval(() => {
-    if(gameState === 'paused' || gameState === 'menu') { clearInterval(timer); ui.style.display = 'none'; return; }
+    if(gameState === 'paused' || gameState === 'menu' || gameState === 'intro') { clearInterval(timer); ui.style.display = 'none'; return; }
     count--;
     if (count > 0) { 
       txt.innerText = count; txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = 'pop 1s ease-out infinite'; 
@@ -1226,7 +1389,7 @@ window.addEventListener('keyup', (e) => {
 
   function updateAudio(dt, ghostSpeed) {
     if (!settings.sound || !audioCtx) return;
-    const isActive = (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating');
+    const isActive = (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating' || gameState === 'intro');
     const speedRatio = isActive ? (Math.abs(window.kart.speedForward) / window.kart.maxSpeed) : 0;
     const engV = audioVol('engine');
     const skidV = audioVol('skid');
@@ -2045,15 +2208,44 @@ window.addEventListener('keyup', (e) => {
         lap: 1, finished: false, finishTime: null, place: i + 2
       });
     });
+    placeNetRemotesOnGrid();
   }
+
+  function placeNetRemotesOnGrid() {
+    if (!window.pts || !window.pts.length || !window.getGridSpawn) return;
+    netRemotes.forEach(r => {
+      const spawn = window.getGridSpawn(r.slot | 0);
+      r.pos.copy(spawn.pos);
+      r.heading = spawn.heading;
+      r.hopOffset = 0;
+      r.mesh.visible = true;
+      r.mesh.position.copy(spawn.pos);
+      const fw = new THREE.Vector3(Math.sin(spawn.heading), 0, Math.cos(spawn.heading));
+      r.mesh.up.set(0, 1, 0);
+      r.mesh.lookAt(r.mesh.position.clone().add(fw));
+    });
+  }
+  window.placeNetRemotesOnGrid = placeNetRemotesOnGrid;
 
   function updateNetRemotes(dt) {
     if (gameMode !== 'online' || !window.Net) return;
     if (window.Net.tickRemotes) Net.tickRemotes(dt);
     const states = Net.getRemoteStates();
+    const holdGrid = (gameState === 'intro' || gameState === 'countdown');
     for (const r of netRemotes) {
       const st = states.get(r.id);
-      if (!st) { r.mesh.visible = false; continue; }
+      if (!st) {
+        if (holdGrid) {
+          r.mesh.visible = true;
+          r.mesh.position.set(r.pos.x, r.pos.y + (r.hopOffset || 0), r.pos.z);
+          const fw = new THREE.Vector3(Math.sin(r.heading), 0, Math.cos(r.heading));
+          r.mesh.up.set(0, 1, 0);
+          r.mesh.lookAt(r.mesh.position.clone().add(fw));
+        } else {
+          r.mesh.visible = false;
+        }
+        continue;
+      }
       r.mesh.visible = true;
       r.pos.set(st.x, st.y, st.z);
       r.heading = st.h;
@@ -2067,7 +2259,7 @@ window.addEventListener('keyup', (e) => {
       r.mesh.up.set(0, 1, 0);
       r.mesh.lookAt(r.mesh.position.clone().add(fw));
     }
-    if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating') updateRacePlaces();
+    if (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating' || gameState === 'intro') updateRacePlaces();
     if (window.checkRaceComplete) window.checkRaceComplete();
   }
 
@@ -2553,6 +2745,9 @@ window.addEventListener('keyup', (e) => {
   window.cameraShakeTimer = 0;
 
   function updateCamera(dt) {
+    if (gameState === 'intro' && window.raceIntroCamera && window.raceIntroCamera(camera, camTargetPos, camTargetLook)) {
+      return;
+    }
     const follow = (gameState === 'spectating' && window.getSpectateFollow) ? window.getSpectateFollow() : null;
     const followPos = follow
       ? new THREE.Vector3(follow.pos.x, follow.pos.y + (follow.hopOffset || 0.1), follow.pos.z)
@@ -2715,13 +2910,13 @@ window.addEventListener('keyup', (e) => {
   function updateSparks(dt) {
     for (const s of sparks) {
       if (!s.mesh.visible) continue;
-      if (gameState === 'countdown') { s.life = 0; s.mesh.visible = false; continue; }
+      if (gameState === 'countdown' || gameState === 'intro') { s.life = 0; s.mesh.visible = false; continue; }
       s.life -= dt; if (s.life <= 0) { s.mesh.visible = false; continue; }
       s.vel.y -= 6 * dt; s.mesh.position.addScaledVector(s.vel, dt); s.mesh.material.opacity = Math.max(0, s.life / 0.4);
     }
     for (const p of exhaustParticles) {
       if (!p.mesh.visible) continue;
-      if (gameState === 'countdown') { p.life = 0; p.mesh.visible = false; continue; }
+      if (gameState === 'countdown' || gameState === 'intro') { p.life = 0; p.mesh.visible = false; continue; }
       p.life -= dt; 
       if (p.life <= 0) { p.mesh.visible = false; continue; }
       
@@ -2732,7 +2927,7 @@ window.addEventListener('keyup', (e) => {
     }
     for (const p of boostSparkParticles) {
       if (!p.mesh.visible) continue;
-      if (gameState === 'countdown') { p.life = 0; p.mesh.visible = false; continue; }
+      if (gameState === 'countdown' || gameState === 'intro') { p.life = 0; p.mesh.visible = false; continue; }
       p.life -= dt;
       if (p.life <= 0) { p.mesh.visible = false; continue; }
       p.vel.y -= 12 * dt;
@@ -2742,7 +2937,7 @@ window.addEventListener('keyup', (e) => {
     }
     for (const p of mythicTrailParticles) {
       if (!p.mesh.visible) continue;
-      if (gameState === 'countdown') { p.life = 0; p.mesh.visible = false; continue; }
+      if (gameState === 'countdown' || gameState === 'intro') { p.life = 0; p.mesh.visible = false; continue; }
       p.life -= dt;
       if (p.life <= 0) { p.mesh.visible = false; continue; }
       p.mesh.position.addScaledVector(p.vel, dt);
@@ -2760,10 +2955,11 @@ window.addEventListener('keyup', (e) => {
       window.hitstopTimer -= dt;
       dt *= 0.15;
     }
-    if (gameState === 'countdown' || gameState === 'playing' || gameState === 'finished' || gameState === 'spectating') {
+    if (gameState === 'intro' || gameState === 'countdown' || gameState === 'playing' || gameState === 'finished' || gameState === 'spectating') {
+      if (gameState === 'intro' && window.updateRaceIntro) window.updateRaceIntro(dt);
       if (!window.replaying) {
         updateKart(dt); updateRaceLogic(dt); updateAIRacers(dt); updateNetRemotes(dt); updateHazards(dt);
-        if (gameMode === 'online' && window.Net && (gameState === 'playing' || gameState === 'countdown' || gameState === 'finished' || gameState === 'spectating')) {
+        if (gameMode === 'online' && window.Net && (gameState === 'playing' || gameState === 'countdown' || gameState === 'intro' || gameState === 'finished' || gameState === 'spectating')) {
           Net.pushLocalState({
             x: window.kart.pos.x, y: window.kart.pos.y, z: window.kart.pos.z,
             h: window.kart.heading, sf: window.kart.speedForward, ho: window.kart.hopOffset,

@@ -532,6 +532,15 @@
   };
 
   window.Net.onRaceStart(function (cfg) {
+    if (cfg.players) {
+      Net.players.clear();
+      cfg.players.forEach(p => {
+        Net.players.set(p.id, {
+          id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready,
+          look: p.look || null
+        });
+      });
+    }
     if (typeof activeMapIndex !== 'undefined') activeMapIndex = cfg.map | 0;
     if (typeof setLaps === 'function') setLaps(cfg.laps | 0 || 3);
     if (window.settings) {
