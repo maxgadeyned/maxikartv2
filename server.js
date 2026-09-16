@@ -14,7 +14,7 @@ const Auth = require('./auth');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-db2';
+const BUILD = 'sio-db3';
 const DEV_USERNAMES = String(process.env.DEV_USERNAMES || '')
   .split(',')
   .map(s => s.trim().toUpperCase())
@@ -35,28 +35,41 @@ const app = express();
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(__dirname));
 app.get('/api/config', (_req, res) => {
+  const info = Store.persistenceInfo();
   res.json({
     ok: true,
     build: BUILD,
-    persistence: Store.persistenceMode(),
-    durable: Store.persistenceMode() === 'postgres',
-    warning: Store.persistenceMode() === 'file'
+    persistence: info.mode,
+    durable: info.durable,
+    databaseUrlSet: info.databaseUrlSet,
+    storeError: info.error,
+    warning: info.mode === 'file'
       ? 'Ephemeral file storage — accounts and leaderboards reset on deploy. Set DATABASE_URL (Neon) on Render.'
       : null
   });
 });
 
-app.get('/health', (_req, res) => res.json({
-  ok: true,
-  build: BUILD,
-  persistence: Store.persistenceMode()
-}));
-app.get('/version', (_req, res) => res.json({
-  ok: true,
-  build: BUILD,
-  commit: process.env.RENDER_GIT_COMMIT || 'local',
-  persistence: Store.persistenceMode()
-}));
+app.get('/health', (_req, res) => {
+  const info = Store.persistenceInfo();
+  res.json({
+    ok: true,
+    build: BUILD,
+    persistence: info.mode,
+    databaseUrlSet: info.databaseUrlSet,
+    storeError: info.error
+  });
+});
+app.get('/version', (_req, res) => {
+  const info = Store.persistenceInfo();
+  res.json({
+    ok: true,
+    build: BUILD,
+    commit: process.env.RENDER_GIT_COMMIT || 'local',
+    persistence: info.mode,
+    databaseUrlSet: info.databaseUrlSet,
+    storeError: info.error
+  });
+});
 
 function authedUser(req) {
   const token = Auth.readBearer(req);

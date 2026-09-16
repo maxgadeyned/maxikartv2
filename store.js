@@ -18,6 +18,7 @@ let pool = null;
 let ready = false;
 let saveTimer = null;
 let saving = null;
+let lastStoreError = null;
 
 function emptyStore() {
   return { users: {}, boards: {}, updatedAt: Date.now() };
@@ -55,10 +56,23 @@ function persistenceMode() {
   return pool ? 'postgres' : 'file';
 }
 
+function persistenceInfo() {
+  const mode = persistenceMode();
+  const hasUrl = !!DATABASE_URL;
+  return {
+    mode,
+    durable: mode === 'postgres',
+    databaseUrlSet: hasUrl,
+    error: mode === 'file' ? (lastStoreError || (hasUrl ? 'postgres-connect-failed' : 'DATABASE_URL not set')) : null
+  };
+}
+
 async function init() {
+  lastStoreError = null;
   if (!DATABASE_URL) {
     cache = loadFile();
     ready = true;
+    lastStoreError = 'DATABASE_URL not set';
     const onRender = !!(process.env.RENDER || process.env.RENDER_SERVICE_ID);
     if (onRender) {
       console.error('[store] WARNING: No DATABASE_URL on Render — accounts/leaderboards RESET on every deploy.');
@@ -73,7 +87,8 @@ async function init() {
     pool = new Pool({
       connectionString: DATABASE_URL,
       ssl: DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-      max: 3
+      max: 3,
+      connectionTimeoutMillis: 8000
     });
     await pool.query(`
       CREATE TABLE IF NOT EXISTS maxikart_store (
@@ -96,9 +111,11 @@ async function init() {
       await persistPostgres(true);
     }
     ready = true;
+    lastStoreError = null;
     console.log('[store] Using Postgres (DATABASE_URL) — data survives deploys');
   } catch (err) {
-    console.error('[store] Postgres unavailable, falling back to file:', err.message || err);
+    lastStoreError = String(err && err.message ? err.message : err).slice(0, 240);
+    console.error('[store] Postgres unavailable, falling back to file:', lastStoreError);
     if (pool) {
       try { await pool.end(); } catch (_e) {}
       pool = null;
@@ -333,6 +350,7 @@ module.exports = {
   flush,
   ready: () => ready,
   persistenceMode,
+  persistenceInfo,
   LEADERBOARD_SIZE,
   ALLOWED_MAPS,
   ALLOWED_LAPS,
