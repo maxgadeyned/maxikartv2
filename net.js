@@ -1,7 +1,4 @@
-/* MAXIKART — client multiplayer (WebSocket rooms on server.js)
-   Same-origin by default (local bat OR Render URL). Optional override:
-   window.MAXIKART_WS = 'wss://your-app.onrender.com/ws'
-*/
+/* MAXIKART — client multiplayer (Socket.IO → same server as the page) */
 (function () {
   const MAX_PLAYERS = 4;
   const STATE_HZ = 30;
@@ -9,7 +6,7 @@
 
   const Net = {
     role: null,
-    ws: null,
+    socket: null,
     roomCode: null,
     localId: null,
     localName: 'RACER',
@@ -26,19 +23,9 @@
     _intentionalLeave: false
   };
 
-  function wsUrl() {
-    if (window.MAXIKART_WS) return String(window.MAXIKART_WS);
-    const loc = window.location;
-    if (loc.protocol === 'http:' || loc.protocol === 'https:') {
-      const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-      return proto + '//' + loc.host + '/ws';
-    }
-    return 'ws://127.0.0.1:8765/ws';
-  }
-
   function ensurePageOk() {
     if (window.location.protocol === 'http:' || window.location.protocol === 'https:') return true;
-    alert('Open MAXIKART via the server URL.\n\nLocal: run START MAXIKART.bat → http://127.0.0.1:8765\nOnline: open your Render link');
+    alert('Open MAXIKART via the server URL.\n\nLocal: START MAXIKART.bat → http://127.0.0.1:8765\nOnline: your Render https://….onrender.com link');
     return false;
   }
 
@@ -113,11 +100,7 @@
     Net.players.clear();
     (players || []).forEach(p => {
       Net.players.set(p.id, {
-        id: p.id,
-        name: p.name,
-        slot: p.slot,
-        host: !!p.host,
-        ready: !!p.ready
+        id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready
       });
     });
     emitLobby();
@@ -200,18 +183,14 @@
     return [...Net.players.values()]
       .sort((a, b) => a.slot - b.slot)
       .map(p => ({
-        id: p.id,
-        name: p.name,
-        slot: p.slot,
-        host: !!p.host,
-        ready: !!p.ready,
+        id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready,
         you: p.id === Net.localId
       }));
   }
 
   function send(obj) {
-    if (!Net.ws || Net.ws.readyState !== 1) return;
-    try { Net.ws.send(JSON.stringify(obj)); } catch (e) {}
+    if (!Net.socket || !Net.socket.connected) return;
+    Net.socket.emit('msg', obj);
   }
 
   function ingestRemoteState(data) {
@@ -312,7 +291,7 @@
   function startPing() {
     if (Net._pingTimer) clearInterval(Net._pingTimer);
     Net._pingTimer = setInterval(() => {
-      if (!Net.ws || Net.ws.readyState !== 1) return;
+      if (!Net.socket || !Net.socket.connected) return;
       Net._pingSentAt = performance.now();
       send({ t: 'ping', n: Net._pingSentAt });
     }, 2000);
@@ -321,16 +300,16 @@
   function cleanup(sendBye) {
     Net._intentionalLeave = true;
     if (Net._pingTimer) { clearInterval(Net._pingTimer); Net._pingTimer = null; }
-    if (sendBye && Net.ws && Net.ws.readyState === 1) {
-      try { Net.ws.send(JSON.stringify({ t: 'bye' })); } catch (e) {}
+    if (sendBye && Net.socket && Net.socket.connected) {
+      try { Net.socket.emit('msg', { t: 'bye' }); } catch (e) {}
     }
-    if (Net.ws) {
+    if (Net.socket) {
       try {
-        Net.ws.onopen = Net.ws.onmessage = Net.ws.onclose = Net.ws.onerror = null;
-        Net.ws.close();
+        Net.socket.removeAllListeners();
+        Net.socket.disconnect();
       } catch (e) {}
     }
-    Net.ws = null;
+    Net.socket = null;
     Net.role = null;
     Net.roomCode = null;
     Net.localId = null;
@@ -342,35 +321,40 @@
     emitLobby();
   }
 
-  function leave() {
-    cleanup(true);
-  }
+  function leave() { cleanup(true); }
 
-  function connectAndSend(firstMsg) {
+  function connectSocket() {
     return new Promise((resolve, reject) => {
-      let done = false;
-      const ws = new WebSocket(wsUrl());
-      Net.ws = ws;
-      ws.onopen = () => {
-        if (done) return;
-        done = true;
-        send(firstMsg);
-        resolve();
-      };
-      ws.onmessage = (ev) => {
-        try { handleMsg(JSON.parse(ev.data)); } catch (e) {}
-      };
-      ws.onerror = () => {
-        if (done) return;
-        done = true;
-        reject(new Error('ws'));
-      };
-      ws.onclose = () => {
-        if (!done) {
-          done = true;
-          reject(new Error('closed'));
-          return;
-        }
+      if (typeof io === 'undefined') {
+        reject(new Error('socket.io missing'));
+        return;
+      }
+      const socket = io({
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        rememberUpgrade: false,
+        timeout: 20000,
+        forceNew: true
+      });
+      Net.socket = socket;
+      let settled = false;
+
+      socket.on('connect', () => {
+        if (settled) return;
+        settled = true;
+        resolve(socket);
+      });
+
+      socket.on('msg', handleMsg);
+
+      socket.on('connect_error', (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err || new Error('connect_error'));
+      });
+
+      socket.on('disconnect', () => {
         if (Net._intentionalLeave) return;
         if (!Net.role) return;
         const was = Net.role;
@@ -379,7 +363,7 @@
         alert('Lost connection to the game server.');
         if (was && typeof quitToMenu === 'function' && typeof gameState !== 'undefined' && gameState !== 'menu') quitToMenu();
         else navTo('menu-multi');
-      };
+      });
     });
   }
 
@@ -403,11 +387,13 @@
     if (!ensurePageOk()) return;
     Net.localName = playerName();
     showLobbyShell(true, '----');
-    connectAndSend({ t: 'create', name: Net.localName }).catch(() => {
-      alert('Could not reach the game server.\n\nLocal: run START MAXIKART.bat and open http://127.0.0.1:8765\nOnline: open your Render URL');
-      leave();
-      navTo('menu-multi');
-    });
+    connectSocket()
+      .then(() => send({ t: 'create', name: Net.localName }))
+      .catch(() => {
+        alert('Could not reach the game server.\n\nWait for Render to finish deploying, hard-refresh (Ctrl+F5), then try again.\n\nLocal: use START MAXIKART.bat → http://127.0.0.1:8765');
+        leave();
+        navTo('menu-multi');
+      });
   }
 
   function joinRoom(code) {
@@ -426,11 +412,13 @@
       Net.localName = playerName();
     }
     showLobbyShell(false, clean);
-    connectAndSend({ t: 'join', code: clean, name: Net.localName }).catch(() => {
-      alert('Could not reach the game server. Open the same site URL as the host.');
-      leave();
-      navTo('menu-join');
-    });
+    connectSocket()
+      .then(() => send({ t: 'join', code: clean, name: Net.localName }))
+      .catch(() => {
+        alert('Could not reach the game server. Open the same Render/local URL as the host.');
+        leave();
+        navTo('menu-join');
+      });
   }
 
   function setLocalName(raw) {
@@ -507,7 +495,8 @@
 
   window.Net = {
     hostRoom, joinRoom, leave, startRace, setLocalName, toggleReady, setReady,
-    pushLocalState, getRemoteStates: () => Net.remoteStates, getPlayers, getLocalSlot: () => {
+    pushLocalState, getRemoteStates: () => Net.remoteStates, getPlayers,
+    getLocalSlot: () => {
       const p = Net.players.get(Net.localId);
       return p ? p.slot : 0;
     },
