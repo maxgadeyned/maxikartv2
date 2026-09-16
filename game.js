@@ -1222,9 +1222,21 @@ function triggerFinish() {
       ghostData = currentRunGhostData; finishNote.innerText = "NEW BEST TIME!";
     } else { finishNote.innerText = ""; }
     if (window.Leaderboards && !window.raceTainted) {
-      const rank = window.Leaderboards.submit(mapId, maxLaps, raceTime);
       const lbNote = document.getElementById('finishLeaderboardNote');
-      if (lbNote) lbNote.textContent = rank ? `Leaderboard #${rank}` : '';
+      if (lbNote) lbNote.textContent = 'Saving…';
+      Promise.resolve(window.Leaderboards.submit(mapId, maxLaps, raceTime)).then(rank => {
+        if (!lbNote) return;
+        if (rank) {
+          const signed = window.Account && Account.isSignedIn && Account.isSignedIn();
+          lbNote.textContent = signed ? `Global #${rank}` : `Local #${rank} · sign in to go global`;
+        } else {
+          lbNote.textContent = (window.Account && Account.isSignedIn && Account.isSignedIn())
+            ? ''
+            : 'Sign in on Account to post global times';
+        }
+      }).catch(() => {
+        if (lbNote) lbNote.textContent = '';
+      });
     } else {
       const lbNote = document.getElementById('finishLeaderboardNote');
       if (lbNote) lbNote.textContent = '';

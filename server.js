@@ -8,13 +8,16 @@ const express = require('express');
 const { Server } = require('socket.io');
 const { randomUUID } = require('crypto');
 const AC = require('./anticheat');
+const Store = require('./store');
+const Auth = require('./auth');
 
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-look1';
+const BUILD = 'sio-auth1';
 
 const app = express();
+app.use(express.json({ limit: '32kb' }));
 app.use(express.static(__dirname));
 app.get('/health', (_req, res) => res.json({ ok: true, build: BUILD }));
 app.get('/version', (_req, res) => res.json({
@@ -22,6 +25,109 @@ app.get('/version', (_req, res) => res.json({
   build: BUILD,
   commit: process.env.RENDER_GIT_COMMIT || 'local'
 }));
+
+app.get('/api/config', (_req, res) => {
+  res.json({
+    ok: true,
+    build: BUILD,
+    googleClientId: Auth.GOOGLE_CLIENT_ID || null,
+    googleEnabled: !!Auth.GOOGLE_CLIENT_ID
+  });
+});
+
+function authedUser(req) {
+  const token = Auth.readBearer(req);
+  const uid = Auth.verifySession(token);
+  if (!uid) return null;
+  return Store.getUser(uid);
+}
+
+app.get('/api/me', (req, res) => {
+  const user = authedUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'auth' });
+  res.json({ ok: true, user: Store.publicUser(user) });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const profile = await Auth.verifyGoogleIdToken(req.body && req.body.credential);
+    const user = Store.upsertGoogleUser(profile);
+    const token = Auth.signSession(user.id);
+    res.json({ ok: true, token, user: Store.publicUser(user) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'google-failed' });
+  }
+});
+
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const user = Store.createPinUser(req.body && req.body.name, req.body && req.body.pin);
+    const token = Auth.signSession(user.id);
+    res.json({ ok: true, token, user: Store.publicUser(user) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'register-failed' });
+  }
+});
+
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const user = Store.loginPinUser(req.body && req.body.name, req.body && req.body.pin);
+    const token = Auth.signSession(user.id);
+    res.json({ ok: true, token, user: Store.publicUser(user) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'login-failed' });
+  }
+});
+
+app.post('/api/account/name', (req, res) => {
+  const user = authedUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'auth' });
+  try {
+    const updated = Store.setUserName(user.id, req.body && req.body.name);
+    res.json({ ok: true, user: Store.publicUser(updated) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'name-failed' });
+  }
+});
+
+app.get('/api/leaderboard', (req, res) => {
+  const mapId = String(req.query.map || 'neon');
+  const laps = parseInt(req.query.laps, 10) || 3;
+  if (!Store.ALLOWED_MAPS.has(mapId) || !Store.ALLOWED_LAPS.has(laps)) {
+    return res.status(400).json({ ok: false, error: 'bad-board' });
+  }
+  const board = Store.getBoard(mapId, laps).map((e, i) => ({
+    rank: i + 1,
+    name: e.name,
+    time: e.time,
+    date: e.date
+  }));
+  res.json({ ok: true, map: mapId, laps, board });
+});
+
+app.post('/api/leaderboard/submit', (req, res) => {
+  const user = authedUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'auth' });
+  try {
+    const mapId = String(req.body && req.body.map);
+    const laps = parseInt(req.body && req.body.laps, 10);
+    const time = Number(req.body && req.body.time);
+    const result = Store.submitTime(user.id, mapId, laps, time);
+    res.json({
+      ok: true,
+      rank: result.rank,
+      improved: result.improved,
+      board: result.board.map((e, i) => ({
+        rank: i + 1,
+        name: e.name,
+        time: e.time,
+        date: e.date
+      }))
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'submit-failed' });
+  }
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {

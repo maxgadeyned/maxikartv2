@@ -19,6 +19,7 @@
   <div class="menu-subtitle">Arcade Racing Prototype</div>
   <button class="menu-btn" onclick="playUIChime(); navTo('menu-single')"><span class="btn-ico">🏁</span>Single Player</button>
   <button class="menu-btn" onclick="playUIChime(); navTo('menu-multi')"><span class="btn-ico">🌐</span>Multiplayer</button>
+  <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-account')"><span class="btn-ico">👤</span>Account <span id="accountChip" class="account-chip">GUEST</span></button>
   <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-garage')"><span class="btn-ico">🔧</span>Garage</button>
   <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-loot')"><span class="btn-ico">🎁</span>Loot Box</button>
   <button class="menu-btn alt" onclick="playUIChime(); navTo('menu-daily')"><span class="btn-ico">📅</span>Daily Rewards</button>
@@ -284,33 +285,95 @@
   <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
 </div>
 
+<!-- ============ ACCOUNT ============ -->
+<div id="menu-account" class="menu-overlay">
+  <div class="menu-title small">ACCOUNT</div>
+  <p id="accountStatus" class="account-status">Playing as guest — scores stay on this device until you sign in</p>
+
+  <div class="account-panel" id="accountSignedPanel" style="display:none;">
+    <div class="settings-grid single-col">
+      <div class="setting-row full">
+        <span class="setting-label">Racer Name</span>
+        <input type="text" id="accountNameInput" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+      </div>
+    </div>
+    <p class="account-hint">This name is used in multiplayer lobbies and on the global leaderboard.</p>
+    <button class="menu-btn" onclick="playUIChime(); Account.saveDisplayName()"><span class="btn-ico">💾</span>Save Name</button>
+    <button class="menu-btn alt" onclick="Account.signOut()"><span class="btn-ico">🚪</span>Sign Out</button>
+  </div>
+
+  <div class="account-panel" id="accountGuestPanel">
+    <div class="settings-grid single-col">
+      <div class="setting-row full">
+        <span class="setting-label">Guest Name</span>
+        <input type="text" id="accountNameInputGuest" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;"
+          onchange="Account.applyNameLocally(this.value); Account.syncNameInputs();">
+      </div>
+    </div>
+    <p class="account-hint">Play freely as a guest. Sign in to save times to the global leaderboard and keep your name.</p>
+
+    <div id="accountGoogleWrap" class="account-google" style="display:none;">
+      <div class="account-divider">Sign in with Google</div>
+      <div id="googleSignInBtn" class="google-btn-host"></div>
+    </div>
+    <p id="accountNoGoogleHint" class="account-hint" style="display:none;">Google login works when <code>GOOGLE_CLIENT_ID</code> is set on the server. You can still save an account with a PIN below.</p>
+
+    <div class="account-divider">Save account with PIN</div>
+    <div class="settings-grid single-col">
+      <div class="setting-row full">
+        <span class="setting-label">New Name</span>
+        <input type="text" id="accountRegName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+      </div>
+      <div class="setting-row full">
+        <span class="setting-label">New PIN</span>
+        <input type="password" id="accountRegPin" class="room-code-input" maxlength="6" inputmode="numeric" placeholder="4–6 digits">
+      </div>
+    </div>
+    <button class="menu-btn" onclick="Account.registerPin()"><span class="btn-ico">✨</span>Create Account</button>
+
+    <div class="account-divider">Already have a PIN account?</div>
+    <div class="settings-grid single-col">
+      <div class="setting-row full">
+        <span class="setting-label">Name</span>
+        <input type="text" id="accountLoginName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
+      </div>
+      <div class="setting-row full">
+        <span class="setting-label">PIN</span>
+        <input type="password" id="accountLoginPin" class="room-code-input" maxlength="6" inputmode="numeric" placeholder="PIN">
+      </div>
+    </div>
+    <button class="menu-btn alt" onclick="Account.loginPin()"><span class="btn-ico">🔑</span>Log In</button>
+    <button class="menu-btn ghost" onclick="Account.continueAsGuest()">Continue as Guest ▸</button>
+  </div>
+
+  <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
+</div>
+
 <!-- ============ LEADERBOARDS ============ -->
 <div id="menu-leaderboard" class="menu-overlay">
   <div class="menu-title small">LEADERBOARDS</div>
+  <p class="account-hint">Global top 10 time trials. Sign in on Account to upload your times.</p>
   <div class="settings-grid single-col">
     <div class="setting-row full">
-      <span class="setting-label">Your Name</span>
-      <input type="text" id="lbPlayerName" class="room-code-input" maxlength="12" placeholder="RACER" style="text-transform:uppercase;">
-    </div>
-    <div class="setting-row full">
       <span class="setting-label">Track</span>
-      <select id="lbMapSelect" class="lb-select" onchange="Leaderboards.render()">
-        <option value="neon">NEON LABYRINTH</option>
-        <option value="tiburtina">TIBURTINA SPRINT</option>
-        <option value="knot">KNOT CIRCUIT</option>
-        <option value="ridge">RIDGE RUN</option>
-      </select>
+      <div class="map-selector">
+        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleMap(-1)">◀</button>
+        <div class="map-name" id="lbMapDisplay">NEON LABYRINTH</div>
+        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleMap(1)">▶</button>
+      </div>
     </div>
     <div class="setting-row full">
       <span class="setting-label">Laps</span>
-      <select id="lbLapSelect" class="lb-select" onchange="Leaderboards.render()">
-        <option value="1">1</option>
-        <option value="3" selected>3</option>
-        <option value="5">5</option>
-      </select>
+      <div class="map-selector">
+        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleLaps(-1)">◀</button>
+        <div class="map-name" id="lbLapDisplay">3 LAPS</div>
+        <button class="map-btn" onclick="playUIChime(); Leaderboards.cycleLaps(1)">▶</button>
+      </div>
     </div>
   </div>
+  <div id="lbScopeNote" class="lb-scope">GLOBAL</div>
   <div id="lbList" class="lb-list"></div>
+  <button class="menu-btn alt" onclick="playUIChime(); Leaderboards.render()"><span class="btn-ico">↻</span>Refresh</button>
   <button class="menu-btn ghost" onclick="playUIChime(); navTo('menu-main')">◂ Back</button>
 </div>
 
@@ -488,6 +551,7 @@
 <script src="game.js"></script>
 <script src="systems.js"></script>
 <script src="cosmetics.js"></script>
+<script src="account.js"></script>
 <script src="economy.js"></script>
 <script src="garage.js"></script>
 <script src="net.js"></script>

@@ -30,7 +30,11 @@
   }
 
   function playerName() {
-    const el = document.getElementById('lbPlayerName') || document.getElementById('joinPlayerName');
+    if (window.Account && Account.getName) {
+      const n = Account.getName();
+      if (n) return String(n).toUpperCase().slice(0, 12) || 'RACER';
+    }
+    const el = document.getElementById('joinPlayerName') || document.getElementById('lobbyHostName');
     const n = (el && el.value) || localStorage.getItem('kartPlayerName') || 'RACER';
     return String(n).toUpperCase().slice(0, 12) || 'RACER';
   }

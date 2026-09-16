@@ -305,7 +305,17 @@
     setTimeout(() => btn.classList.remove('shaking'), 350);
   }
 
-  // ---------------- Local leaderboards ----------------
+  // ---------------- Leaderboards (local + global) ----------------
+  const LB_MAPS = [
+    { id: 'neon', name: 'NEON LABYRINTH' },
+    { id: 'tiburtina', name: 'TIBURTINA SPRINT' },
+    { id: 'knot', name: 'KNOT CIRCUIT' },
+    { id: 'ridge', name: 'RIDGE RUN' }
+  ];
+  const LB_LAPS = [1, 3, 5];
+  let lbMapIndex = 0;
+  let lbLapIndex = 1; // default 3 laps
+
   function lbKey(mapId, laps) { return `kartLB_${mapId}_${laps}`; }
 
   function loadBoard(mapId, laps) {
@@ -320,6 +330,7 @@
   }
 
   function getPlayerName() {
+    if (window.Account && Account.getName) return Account.getName();
     let name = localStorage.getItem('kartPlayerName');
     if (!name) {
       name = 'RACER';
@@ -331,58 +342,97 @@
   function setPlayerName(name) {
     const clean = String(name || 'RACER').trim().slice(0, 12).toUpperCase() || 'RACER';
     localStorage.setItem('kartPlayerName', clean);
+    if (window.Account && Account.syncNameInputs) Account.syncNameInputs();
     return clean;
   }
 
   function submitLeaderboard(mapId, laps, time) {
-    if (!Number.isFinite(time) || time <= 0) return null;
+    if (!Number.isFinite(time) || time <= 0) return Promise.resolve(null);
     const board = loadBoard(mapId, laps);
     const entry = { name: getPlayerName(), time, date: todayKey() };
     board.push(entry);
     board.sort((a, b) => a.time - b.time);
     const trimmed = board.slice(0, LEADERBOARD_SIZE);
     saveBoard(mapId, laps, trimmed);
-    const rank = trimmed.findIndex(e => e === entry || (e.name === entry.name && e.time === entry.time && e.date === entry.date)) + 1;
-    return rank > 0 && rank <= LEADERBOARD_SIZE ? rank : null;
+    const localRank = trimmed.findIndex(e => e === entry || (e.name === entry.name && e.time === entry.time && e.date === entry.date)) + 1;
+    const localOk = localRank > 0 && localRank <= LEADERBOARD_SIZE ? localRank : null;
+
+    if (window.Account && Account.isSignedIn && Account.isSignedIn() && Account.submitGlobal) {
+      return Account.submitGlobal(mapId, laps, time).then(result => {
+        if (result && result.ok && result.rank) return result.rank;
+        return localOk;
+      }).catch(() => localOk);
+    }
+    return Promise.resolve(localOk);
   }
 
-  function renderLeaderboardUI() {
-    const mapSel = document.getElementById('lbMapSelect');
-    const lapSel = document.getElementById('lbLapSelect');
-    const list = document.getElementById('lbList');
-    const nameInput = document.getElementById('lbPlayerName');
-    if (!list) return;
-
-    if (nameInput && !nameInput.dataset.bound) {
-      nameInput.value = getPlayerName();
-      nameInput.dataset.bound = '1';
-      nameInput.addEventListener('change', () => {
-        nameInput.value = setPlayerName(nameInput.value);
-      });
-    }
-
-    const mapId = mapSel ? mapSel.value : 'neon';
-    const laps = lapSel ? parseInt(lapSel.value, 10) : 3;
-    const board = loadBoard(mapId, laps);
-
+  function paintBoardRows(list, board, emptyMsg) {
     if (!board.length) {
-      list.innerHTML = '<div class="lb-empty">No times yet — finish a Time Trial!</div>';
+      list.innerHTML = `<div class="lb-empty">${emptyMsg}</div>`;
       return;
     }
     list.innerHTML = board.map((e, i) => `
       <div class="lb-row">
-        <span class="lb-rank">#${i + 1}</span>
+        <span class="lb-rank">#${e.rank || (i + 1)}</span>
         <span class="lb-name">${e.name}</span>
         <span class="lb-time">${typeof formatTime === 'function' ? formatTime(e.time) : e.time.toFixed(2)}</span>
       </div>
     `).join('');
   }
 
+  function syncLbSelectors() {
+    const map = LB_MAPS[lbMapIndex] || LB_MAPS[0];
+    const laps = LB_LAPS[lbLapIndex] || 3;
+    const mapEl = document.getElementById('lbMapDisplay');
+    const lapEl = document.getElementById('lbLapDisplay');
+    if (mapEl) mapEl.textContent = map.name;
+    if (lapEl) lapEl.textContent = laps + (laps === 1 ? ' LAP' : ' LAPS');
+  }
+
+  function cycleLbMap(dir) {
+    lbMapIndex = (lbMapIndex + dir + LB_MAPS.length) % LB_MAPS.length;
+    syncLbSelectors();
+    renderLeaderboardUI();
+  }
+
+  function cycleLbLaps(dir) {
+    lbLapIndex = (lbLapIndex + dir + LB_LAPS.length) % LB_LAPS.length;
+    syncLbSelectors();
+    renderLeaderboardUI();
+  }
+
+  async function renderLeaderboardUI() {
+    const list = document.getElementById('lbList');
+    const scope = document.getElementById('lbScopeNote');
+    if (!list) return;
+    syncLbSelectors();
+    const map = LB_MAPS[lbMapIndex] || LB_MAPS[0];
+    const laps = LB_LAPS[lbLapIndex] || 3;
+    list.innerHTML = '<div class="lb-empty">Loading…</div>';
+    if (scope) scope.textContent = 'GLOBAL';
+
+    try {
+      if (window.Account && Account.fetchGlobalBoard) {
+        const board = await Account.fetchGlobalBoard(map.id, laps);
+        if (scope) scope.textContent = 'GLOBAL';
+        paintBoardRows(list, board, 'No global times yet — sign in and finish a Time Trial!');
+        return;
+      }
+    } catch (_e) {
+      /* fall through to local */
+    }
+
+    if (scope) scope.textContent = 'LOCAL (offline)';
+    paintBoardRows(list, loadBoard(map.id, laps), 'No times yet — finish a Time Trial!');
+  }
+
   window.Leaderboards = {
     submit: submitLeaderboard,
     get: loadBoard,
     render: renderLeaderboardUI,
-    getPlayerName, setPlayerName
+    getPlayerName, setPlayerName,
+    cycleMap: cycleLbMap,
+    cycleLaps: cycleLbLaps
   };
 
   window.Economy = {
