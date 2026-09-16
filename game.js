@@ -453,6 +453,8 @@ function navTo(targetId) {
 function openSettings() { 
   document.getElementById('bindWarningText').innerText = "";
   refreshVolumeUI();
+  const toggleAuto = document.getElementById('toggle-auto');
+  if (toggleAuto) toggleAuto.checked = !!settings.auto;
   if (gameMode === 'online' && (onlineMenuOpen || gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating')) {
     // Keep the race simulating while settings are open
     onlineMenuOpen = true;
