@@ -116,87 +116,48 @@ const MAPS = [
     ]
   },
   {
-    // Clean overpass layout: loops stay apart; bridges only cross at marked XZ with height
+    // Figure-8 with one flyover. Start stem is exclusive — return stays east (x>=110).
     id: 'overpass', name: 'OVERPASS', accent: '#ff7a3d',
     points: [
-      // Start facing +Z
-      new THREE.Vector3(80, 0, -60),
-      new THREE.Vector3(70, 0, 20),
+      // Start strip on x=0 only (south → north). Nothing else may use x≈0 south of z=-100.
+      new THREE.Vector3(0, 0, -300),
+      new THREE.Vector3(0, 0, -220),
+      new THREE.Vector3(0, 0, -140),
 
-      // Bridge A over (north) — cross at (50, 130)
-      new THREE.Vector3(60, 10, 80),
-      new THREE.Vector3(50, 26, 130),
-      new THREE.Vector3(20, 12, 180),
-      new THREE.Vector3(-50, 0, 220),
+      // Peel WEST immediately
+      new THREE.Vector3(-100, 0, -60),
+      new THREE.Vector3(-220, 0, 20),
+      new THREE.Vector3(-300, 0, 120),
+      new THREE.Vector3(-280, 0, 240),
+      new THREE.Vector3(-160, 0, 310),
+      new THREE.Vector3(-40, 0, 300),
 
-      // Top-left loop (stays x < -40)
-      new THREE.Vector3(-130, 0, 260),
-      new THREE.Vector3(-220, 0, 230),
-      new THREE.Vector3(-260, 0, 150),
-      new THREE.Vector3(-230, 0, 70),
-      new THREE.Vector3(-150, 0, 40),
-      new THREE.Vector3(-160, 0, 110),
-      new THREE.Vector3(-100, 0, 160),
-      new THREE.Vector3(-30, 0, 145),
+      // Flyover EAST — over at (0, 30, 170)
+      new THREE.Vector3(-20, 14, 250),
+      new THREE.Vector3(0, 30, 170),
+      new THREE.Vector3(90, 14, 110),
 
-      // Bridge A under (SE) — same cross (50, 0, 130)
-      new THREE.Vector3(10, 0, 100),
-      new THREE.Vector3(50, 0, 130),
-      new THREE.Vector3(110, 0, 110),
-      new THREE.Vector3(150, 0, 70),
+      // Right lobe
+      new THREE.Vector3(200, 0, 70),
+      new THREE.Vector3(340, 0, 120),
+      new THREE.Vector3(350, 0, 240),
+      new THREE.Vector3(250, 0, 320),
+      new THREE.Vector3(140, 0, 270),
+      new THREE.Vector3(100, 0, 200),
 
-      // Bridge B over (SE) — cross at (190, 40)
-      new THREE.Vector3(170, 10, 55),
-      new THREE.Vector3(190, 26, 40),
-      new THREE.Vector3(215, 10, 5),
-      new THREE.Vector3(230, 0, -50),
+      // Underpass WEST — under at (0, 0, 170)
+      new THREE.Vector3(50, 0, 170),
+      new THREE.Vector3(0, 0, 170),
+      new THREE.Vector3(-40, 0, 150),
 
-      // Bridge C under (east into right loop) — cross at (230, -100)
-      new THREE.Vector3(235, 0, -80),
-      new THREE.Vector3(230, 0, -100),
-      new THREE.Vector3(280, 0, -120),
-      new THREE.Vector3(330, 0, -70),
-
-      // Far-right loop (stays x > 260)
-      new THREE.Vector3(370, 0, -20),
-      new THREE.Vector3(390, 0, 60),
-      new THREE.Vector3(370, 0, 100),
-      // Bridge D under (north) — cross at (350, 130)
-      new THREE.Vector3(350, 0, 130),
-      new THREE.Vector3(360, 0, 190),
-      new THREE.Vector3(330, 0, 250),
-      new THREE.Vector3(270, 0, 255),
-      new THREE.Vector3(230, 0, 200),
-      new THREE.Vector3(250, 0, 155),
-      // Bridge D over (south) — exit SW, don't retrace under entry
-      new THREE.Vector3(300, 12, 145),
-      new THREE.Vector3(350, 26, 130),
-      new THREE.Vector3(320, 12, 75),
-      new THREE.Vector3(290, 0, 25),
-      new THREE.Vector3(270, 0, -35),
-
-      // Bridge C over (west) — same cross (230, 26, -100)
-      new THREE.Vector3(255, 10, -70),
-      new THREE.Vector3(230, 26, -100),
-      new THREE.Vector3(170, 10, -130),
-      new THREE.Vector3(80, 0, -150),
-      new THREE.Vector3(-20, 0, -155),
-
-      // Bottom-left loop (stays x < 0, z < 40)
-      new THREE.Vector3(-110, 0, -130),
-      new THREE.Vector3(-200, 0, -90),
-      new THREE.Vector3(-250, 0, -20),
-      new THREE.Vector3(-220, 0, 50),
-      new THREE.Vector3(-140, 0, 40),
-      new THREE.Vector3(-80, 0, -20),
-      new THREE.Vector3(-20, 0, -50),
-
-      // Bridge B under (NE then home) — same cross (190, 0, 40), then cut west to start
-      new THREE.Vector3(60, 0, -20),
-      new THREE.Vector3(130, 0, 20),
-      new THREE.Vector3(190, 0, 40),
-      new THREE.Vector3(140, 0, 0),
-      new THREE.Vector3(100, 0, -50)
+      // Swing EAST of the start stem, then south home (x stays >= 110 until past start)
+      new THREE.Vector3(20, 0, 80),
+      new THREE.Vector3(110, 0, 20),
+      new THREE.Vector3(140, 0, -80),
+      new THREE.Vector3(140, 0, -180),
+      new THREE.Vector3(130, 0, -260),
+      // Approach start from the SE — do NOT sit on the start line
+      new THREE.Vector3(70, 0, -290)
     ]
   }
 ];
