@@ -119,66 +119,72 @@ const MAPS = [
     // Wild figure-8 + flyover. Long colinear start so launch isn't on a bend.
     id: 'overpass', name: 'OVERPASS', accent: '#ff7a3d',
     points: [
-      // ===== START STRAIGHT (x=0 only) — many colinear points so Catmull stays straight =====
-      new THREE.Vector3(0, 0, -300),
-      new THREE.Vector3(0, 0, -260),
+      // ===== START LINE — long x=0 straight. Grid spawns are the LAST points (south of here) =====
+      new THREE.Vector3(0, 0, -280),
       new THREE.Vector3(0, 0, -220),
-      new THREE.Vector3(0, 0, -180),
-      new THREE.Vector3(0, 0, -140),
+      new THREE.Vector3(0, 0, -160),
       new THREE.Vector3(0, 0, -100),
+      new THREE.Vector3(0, 0, -40),
 
-      // First bite left into a chicane
-      new THREE.Vector3(-60, 0, -40),
-      new THREE.Vector3(-140, 0, -10),
-      new THREE.Vector3(-120, 0, 50),
-      new THREE.Vector3(-200, 0, 70),
+      // Snap left — tight chicane into left bowl
+      new THREE.Vector3(-90, 0, 20),
+      new THREE.Vector3(-170, 0, -10),
+      new THREE.Vector3(-150, 0, 70),
+      new THREE.Vector3(-240, 0, 90),
 
-      // Left lobe — hairpin + esses (stay x <= -80)
-      new THREE.Vector3(-280, 0, 40),
-      new THREE.Vector3(-320, 0, 110),
-      new THREE.Vector3(-280, 0, 180),
-      new THREE.Vector3(-200, 0, 160),
-      new THREE.Vector3(-240, 0, 240),
-      new THREE.Vector3(-300, 0, 300),
-      new THREE.Vector3(-200, 0, 360),
-      new THREE.Vector3(-100, 0, 340),
-      new THREE.Vector3(-40, 0, 280),
+      // Left lobe — double hairpin + wild esses (x <= -90)
+      new THREE.Vector3(-320, 0, 50),
+      new THREE.Vector3(-360, 0, 130),
+      new THREE.Vector3(-300, 0, 200),
+      new THREE.Vector3(-220, 0, 160),
+      new THREE.Vector3(-280, 0, 250),
+      new THREE.Vector3(-340, 0, 320),
+      new THREE.Vector3(-260, 0, 380),
+      new THREE.Vector3(-160, 0, 360),
+      new THREE.Vector3(-200, 0, 280),
+      new THREE.Vector3(-120, 0, 240),
+      new THREE.Vector3(-50, 0, 300),
 
-      // Flyover EAST — over at (0, 30, 190)
-      new THREE.Vector3(-30, 12, 240),
-      new THREE.Vector3(0, 30, 190),
-      new THREE.Vector3(70, 12, 140),
+      // Flyover EAST — over at (0, 32, 200)
+      new THREE.Vector3(-20, 14, 260),
+      new THREE.Vector3(0, 32, 200),
+      new THREE.Vector3(80, 14, 140),
 
-      // Right lobe — sweeping S then tight hook (stay x >= 100)
-      new THREE.Vector3(140, 0, 100),
-      new THREE.Vector3(220, 0, 60),
-      new THREE.Vector3(300, 0, 100),
-      new THREE.Vector3(340, 0, 180),
-      new THREE.Vector3(280, 0, 220),
-      new THREE.Vector3(340, 0, 280),
-      new THREE.Vector3(300, 0, 360),
-      new THREE.Vector3(200, 0, 350),
-      new THREE.Vector3(140, 0, 280),
-      new THREE.Vector3(110, 0, 220),
+      // Right lobe — corkscrew S + hook + reverse hook (x >= 110)
+      new THREE.Vector3(150, 0, 90),
+      new THREE.Vector3(240, 0, 40),
+      new THREE.Vector3(330, 0, 80),
+      new THREE.Vector3(370, 0, 170),
+      new THREE.Vector3(300, 0, 210),
+      new THREE.Vector3(360, 0, 270),
+      new THREE.Vector3(320, 0, 350),
+      new THREE.Vector3(240, 0, 390),
+      new THREE.Vector3(170, 0, 340),
+      new THREE.Vector3(220, 0, 270),
+      new THREE.Vector3(150, 0, 230),
+      new THREE.Vector3(110, 0, 180),
 
-      // Underpass WEST — under at (0, 0, 190)
-      new THREE.Vector3(60, 0, 190),
-      new THREE.Vector3(0, 0, 190),
-      new THREE.Vector3(-50, 0, 170),
+      // Underpass WEST — under at (0, 0, 200)
+      new THREE.Vector3(50, 0, 200),
+      new THREE.Vector3(0, 0, 200),
+      new THREE.Vector3(-55, 0, 175),
 
-      // Kick EAST of stem, one more kink, then long home straight on x=130
-      new THREE.Vector3(30, 0, 100),
-      new THREE.Vector3(120, 0, 40),
-      new THREE.Vector3(160, 0, -20),
-      new THREE.Vector3(120, 0, -80),
-      new THREE.Vector3(140, 0, -140),
-      new THREE.Vector3(130, 0, -200),
-      new THREE.Vector3(130, 0, -260),
-      // Join start straight from the SOUTH along x=0 (keeps start colinear)
-      new THREE.Vector3(80, 0, -310),
-      new THREE.Vector3(30, 0, -340),
-      new THREE.Vector3(0, 0, -340),
-      new THREE.Vector3(0, 0, -320)
+      // Exit kink then weave home east of stem
+      new THREE.Vector3(40, 0, 110),
+      new THREE.Vector3(130, 0, 50),
+      new THREE.Vector3(190, 0, -10),
+      new THREE.Vector3(140, 0, -70),
+      new THREE.Vector3(180, 0, -130),
+      new THREE.Vector3(120, 0, -190),
+      new THREE.Vector3(90, 0, -300),
+      new THREE.Vector3(55, 0, -420),
+      // Soft join far south (clear of stem), then NORTHBOUND approach (spawn → start)
+      new THREE.Vector3(0, 0, -520),
+      new THREE.Vector3(0, 0, -470),
+      new THREE.Vector3(0, 0, -420),
+      new THREE.Vector3(0, 0, -370),
+      new THREE.Vector3(0, 0, -330),
+      new THREE.Vector3(0, 0, -300)
     ]
   }
 ];
