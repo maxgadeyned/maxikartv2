@@ -114,17 +114,6 @@ const MAPS = [
       new THREE.Vector3(-50, 0, 100),
       new THREE.Vector3(25, 0, 100)
     ]
-  },
-  {
-    id: 'ridge', name: 'RIDGE RUN', accent: '#78b4ff',
-    points: [
-      new THREE.Vector3(0, 0, 320), new THREE.Vector3(140, 0, 300), new THREE.Vector3(260, 8, 200),
-      new THREE.Vector3(300, 20, 60), new THREE.Vector3(220, 35, -80), new THREE.Vector3(80, 42, -160),
-      new THREE.Vector3(-40, 38, -220), new THREE.Vector3(-180, 20, -180), new THREE.Vector3(-280, 5, -60),
-      new THREE.Vector3(-300, 0, 80), new THREE.Vector3(-200, 0, 200), new THREE.Vector3(-60, 0, 280),
-      new THREE.Vector3(40, 12, 180), new THREE.Vector3(120, 18, 100)
-    ],
-    shortcuts: [0.42, 0.78]
   }
 ];
 
@@ -585,6 +574,9 @@ function startGame(mode, opts) {
   if (document.activeElement) document.activeElement.blur();
   gameMode = mode;
   const skipIntro = !!(opts && opts.skipIntro);
+
+  if (!MAPS.length) return;
+  activeMapIndex = ((activeMapIndex % MAPS.length) + MAPS.length) % MAPS.length;
 
   const mapId = MAPS[activeMapIndex].id;
   bestTime = localStorage.getItem(`kartBest_${mapId}_${maxLaps}`) ? parseFloat(localStorage.getItem(`kartBest_${mapId}_${maxLaps}`)) : null;

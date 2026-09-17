@@ -124,7 +124,12 @@
 
   function applyLobbySettings(cfg) {
     if (!cfg) return;
-    if (typeof activeMapIndex !== 'undefined' && cfg.map != null) activeMapIndex = cfg.map | 0;
+    if (typeof activeMapIndex !== 'undefined' && cfg.map != null) {
+      activeMapIndex = cfg.map | 0;
+      if (typeof MAPS !== 'undefined' && MAPS.length) {
+        activeMapIndex = ((activeMapIndex % MAPS.length) + MAPS.length) % MAPS.length;
+      }
+    }
     if (typeof setLaps === 'function' && cfg.laps != null) setLaps(cfg.laps | 0 || 3);
     if (window.settings) {
       if (cfg.night != null) settings.night = !!cfg.night;
@@ -545,7 +550,12 @@
         });
       });
     }
-    if (typeof activeMapIndex !== 'undefined') activeMapIndex = cfg.map | 0;
+    if (typeof activeMapIndex !== 'undefined') {
+      activeMapIndex = cfg.map | 0;
+      if (typeof MAPS !== 'undefined' && MAPS.length) {
+        activeMapIndex = ((activeMapIndex % MAPS.length) + MAPS.length) % MAPS.length;
+      }
+    }
     if (typeof setLaps === 'function') setLaps(cfg.laps | 0 || 3);
     if (window.settings) {
       settings.night = !!cfg.night;
