@@ -116,92 +116,87 @@ const MAPS = [
     ]
   },
   {
-    // Hand-drawn layout: orange infields, pink = bridge over, blue = under
+    // Clean overpass layout: loops stay apart; bridges only cross at marked XZ with height
     id: 'overpass', name: 'OVERPASS', accent: '#ff7a3d',
     points: [
-      // --- Start (red) facing +Z ---
-      new THREE.Vector3(40, 0, 20),
-      new THREE.Vector3(35, 8, 90),
-      // Bridge A — pink over (north)
-      new THREE.Vector3(22, 18, 150),
-      new THREE.Vector3(5, 20, 195),
-      new THREE.Vector3(-50, 8, 240),
+      // Start facing +Z
+      new THREE.Vector3(80, 0, -60),
+      new THREE.Vector3(70, 0, 20),
 
-      // Top-left bulb + wiggles
-      new THREE.Vector3(-120, 0, 265),
-      new THREE.Vector3(-190, 0, 250),
-      new THREE.Vector3(-245, 0, 195),
-      new THREE.Vector3(-255, 0, 130),
-      new THREE.Vector3(-220, 0, 80),
-      new THREE.Vector3(-155, 0, 65),
-      new THREE.Vector3(-115, 0, 105),
-      new THREE.Vector3(-145, 0, 155),
-      new THREE.Vector3(-95, 0, 185),
-      new THREE.Vector3(-35, 0, 170),
-      new THREE.Vector3(5, 0, 140),
+      // Bridge A over (north) — cross at (50, 130)
+      new THREE.Vector3(60, 10, 80),
+      new THREE.Vector3(50, 26, 130),
+      new THREE.Vector3(20, 12, 180),
+      new THREE.Vector3(-50, 0, 220),
 
-      // Bridge A under — blue (SE) through same XZ as over
-      new THREE.Vector3(20, 0, 165),
-      new THREE.Vector3(55, 0, 135),
-      new THREE.Vector3(95, 0, 110),
+      // Top-left loop (stays x < -40)
+      new THREE.Vector3(-130, 0, 260),
+      new THREE.Vector3(-220, 0, 230),
+      new THREE.Vector3(-260, 0, 150),
+      new THREE.Vector3(-230, 0, 70),
+      new THREE.Vector3(-150, 0, 40),
+      new THREE.Vector3(-160, 0, 110),
+      new THREE.Vector3(-100, 0, 160),
+      new THREE.Vector3(-30, 0, 145),
 
-      // Bridge B — pink over (SE) cross ~140, 50
-      new THREE.Vector3(130, 14, 80),
-      new THREE.Vector3(150, 22, 50),
-      new THREE.Vector3(160, 12, 10),
+      // Bridge A under (SE) — same cross (50, 0, 130)
+      new THREE.Vector3(10, 0, 100),
+      new THREE.Vector3(50, 0, 130),
+      new THREE.Vector3(110, 0, 110),
+      new THREE.Vector3(150, 0, 70),
 
-      // Bridge C — blue under continuing south cross ~160, -40
-      new THREE.Vector3(170, 0, -40),
-      new THREE.Vector3(185, 0, -90),
-      new THREE.Vector3(220, 0, -125),
+      // Bridge B over (SE) — cross at (190, 40)
+      new THREE.Vector3(170, 10, 55),
+      new THREE.Vector3(190, 26, 40),
+      new THREE.Vector3(215, 10, 5),
+      new THREE.Vector3(230, 0, -50),
 
-      // Far-right loop — enter going east then north
-      new THREE.Vector3(280, 0, -100),
-      new THREE.Vector3(330, 0, -40),
-      // Bridge D — blue under going north (cross at ~300, 90)
-      new THREE.Vector3(335, 0, 30),
-      new THREE.Vector3(300, 0, 90),
-      new THREE.Vector3(305, 0, 160),
-      new THREE.Vector3(290, 0, 230),
-      new THREE.Vector3(230, 0, 260),
-      new THREE.Vector3(175, 0, 230),
-      new THREE.Vector3(165, 0, 170),
-      // Bridge D — pink over coming south (same XZ as under)
-      new THREE.Vector3(200, 12, 130),
-      new THREE.Vector3(300, 22, 90),
-      new THREE.Vector3(320, 12, 40),
-      new THREE.Vector3(300, 0, -10),
-      new THREE.Vector3(250, 0, -50),
+      // Bridge C under (east into right loop) — cross at (230, -100)
+      new THREE.Vector3(235, 0, -80),
+      new THREE.Vector3(230, 0, -100),
+      new THREE.Vector3(280, 0, -120),
+      new THREE.Vector3(330, 0, -70),
 
-      // Bottom sweep west — Bridge C pink over (~160, -40)
-      new THREE.Vector3(200, 10, -70),
-      new THREE.Vector3(160, 22, -40),
-      new THREE.Vector3(125, 10, -70),
-      new THREE.Vector3(80, 0, -115),
-      new THREE.Vector3(20, 0, -140),
-      new THREE.Vector3(-50, 0, -145),
+      // Far-right loop (stays x > 260)
+      new THREE.Vector3(370, 0, -20),
+      new THREE.Vector3(390, 0, 60),
+      new THREE.Vector3(370, 0, 100),
+      // Bridge D under (north) — cross at (350, 130)
+      new THREE.Vector3(350, 0, 130),
+      new THREE.Vector3(360, 0, 190),
+      new THREE.Vector3(330, 0, 250),
+      new THREE.Vector3(270, 0, 255),
+      new THREE.Vector3(230, 0, 200),
+      new THREE.Vector3(250, 0, 155),
+      // Bridge D over (south) — exit SW, don't retrace under entry
+      new THREE.Vector3(300, 12, 145),
+      new THREE.Vector3(350, 26, 130),
+      new THREE.Vector3(320, 12, 75),
+      new THREE.Vector3(290, 0, 25),
+      new THREE.Vector3(270, 0, -35),
 
-      // Toward bottom-left
-      new THREE.Vector3(-120, 0, -125),
-      new THREE.Vector3(-175, 0, -90),
+      // Bridge C over (west) — same cross (230, 26, -100)
+      new THREE.Vector3(255, 10, -70),
+      new THREE.Vector3(230, 26, -100),
+      new THREE.Vector3(170, 10, -130),
+      new THREE.Vector3(80, 0, -150),
+      new THREE.Vector3(-20, 0, -155),
 
-      // Bottom-left loop
-      new THREE.Vector3(-230, 0, -55),
-      new THREE.Vector3(-260, 0, 10),
-      new THREE.Vector3(-245, 0, 70),
-      new THREE.Vector3(-185, 0, 85),
-      new THREE.Vector3(-125, 0, 45),
-      new THREE.Vector3(-95, 0, -15),
-      new THREE.Vector3(-55, 0, -55),
-      new THREE.Vector3(0, 0, -35),
-      new THREE.Vector3(35, 0, 5),
+      // Bottom-left loop (stays x < 0, z < 40)
+      new THREE.Vector3(-110, 0, -130),
+      new THREE.Vector3(-200, 0, -90),
+      new THREE.Vector3(-250, 0, -20),
+      new THREE.Vector3(-220, 0, 50),
+      new THREE.Vector3(-140, 0, 40),
+      new THREE.Vector3(-80, 0, -20),
+      new THREE.Vector3(-20, 0, -50),
 
-      // Bridge B under — blue north (~150, 50) toward start
-      new THREE.Vector3(70, 0, 25),
-      new THREE.Vector3(120, 0, 45),
-      new THREE.Vector3(150, 0, 50),
-      new THREE.Vector3(100, 0, 30),
-      new THREE.Vector3(55, 0, 5)
+      // Bridge B under (NE then home) — same cross (190, 0, 40), then cut west to start
+      new THREE.Vector3(60, 0, -20),
+      new THREE.Vector3(130, 0, 20),
+      new THREE.Vector3(190, 0, 40),
+      new THREE.Vector3(140, 0, 0),
+      new THREE.Vector3(100, 0, -50)
     ]
   }
 ];
