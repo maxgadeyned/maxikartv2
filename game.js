@@ -1726,25 +1726,30 @@ window.addEventListener('keyup', (e) => {
   function updateAudio(dt, ghostSpeed) {
     if (!settings.sound || !audioCtx) return;
     const isActive = (gameState === 'playing' || gameState === 'countdown' || gameState === 'spectating' || gameState === 'intro');
-    const speedRatio = isActive ? (Math.abs(window.kart.speedForward) / window.kart.maxSpeed) : 0;
+    let speedRatio = isActive ? (Math.abs(window.kart.speedForward) / window.kart.maxSpeed) : 0;
+    // Grid rev: holding accel during 3-2-1 spins the engine even though the kart is locked
+    if (gameState === 'countdown' && inputState && inputState.accel) {
+      speedRatio = Math.max(speedRatio, 0.62);
+    }
     const engV = audioVol('engine');
     const skidV = audioVol('skid');
     const ambV = audioVol('ambience');
     // Engine base lowered 30% vs original (×0.7), then category/master sliders
     const engScale = 0.7 * engV;
-    engineOsc.frequency.setTargetAtTime(30 + speedRatio * 80, audioCtx.currentTime, 0.1);
-    engineFilter.frequency.setTargetAtTime(150 + speedRatio * 250, audioCtx.currentTime, 0.1);
+    const engSmooth = (gameState === 'countdown') ? 0.045 : 0.1;
+    engineOsc.frequency.setTargetAtTime(30 + speedRatio * 80, audioCtx.currentTime, engSmooth);
+    engineFilter.frequency.setTargetAtTime(150 + speedRatio * 250, audioCtx.currentTime, engSmooth);
     if (window._engineLayer2) {
-      window._engineLayer2.osc.frequency.setTargetAtTime(55 + speedRatio * 110, audioCtx.currentTime, 0.1);
+      window._engineLayer2.osc.frequency.setTargetAtTime(55 + speedRatio * 110, audioCtx.currentTime, engSmooth);
       const boost = (isActive && window.kart.boostTimer > 0) ? 0.04 : 0.015;
-      window._engineLayer2.gain.gain.setTargetAtTime(isActive ? boost * speedRatio * engScale : 0, audioCtx.currentTime, 0.08);
+      window._engineLayer2.gain.gain.setTargetAtTime(isActive ? boost * Math.max(speedRatio, 0.15) * engScale : 0, audioCtx.currentTime, 0.06);
     }
     if (crowdGain) {
       const wantCrowd = (gameMode === 'multiplayer' || gameMode === 'online') && gameState === 'playing';
       crowdGain.gain.setTargetAtTime(wantCrowd ? 0.025 * ambV : 0, audioCtx.currentTime, 0.3);
     }
     
-    engineGain.gain.setTargetAtTime(isActive ? (0.015 + speedRatio * 0.035) * engScale : 0, audioCtx.currentTime, 0.08);
+    engineGain.gain.setTargetAtTime(isActive ? (0.015 + speedRatio * 0.035) * engScale : 0, audioCtx.currentTime, 0.06);
     skidGain.gain.setTargetAtTime((gameState === 'playing' && window.kart.isDrifting && window.kart.grounded) ? 0.1 * skidV : 0, audioCtx.currentTime, 0.05);
 
     const t = audioCtx.currentTime + 0.1;
