@@ -11,8 +11,8 @@
   const DAILY_CHALLENGE_REWARD = 120;
   const LEADERBOARD_SIZE = 10;
 
-  const MAP_PAYOUT = { neon: 40, tiburtina: 55, knot: 70 };
-  const MAP_PAR_TIME = { neon: 95, tiburtina: 130, knot: 150 };
+  const MAP_PAYOUT = { neon: 40, tiburtina: 55, knot: 70, overpass: 75 };
+  const MAP_PAR_TIME = { neon: 95, tiburtina: 130, knot: 150, overpass: 145 };
   const DUPLICATE_REFUND = { common: 15, uncommon: 30, rare: 60, epic: 120, legendary: 300, mythic: 800 };
 
   function todayKey() {
@@ -462,7 +462,8 @@
   const LB_MAPS = [
     { id: 'neon', name: 'NEON LABYRINTH' },
     { id: 'tiburtina', name: 'TIBURTINA SPRINT' },
-    { id: 'knot', name: 'KNOT CIRCUIT' }
+    { id: 'knot', name: 'KNOT CIRCUIT' },
+    { id: 'overpass', name: 'OVERPASS' }
   ];
   const LB_LAPS = [1, 3, 5];
   let lbMapIndex = 0;

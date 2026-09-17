@@ -10,7 +10,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const STORE_PATH = path.join(DATA_DIR, 'maxikart-store.json');
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const LEADERBOARD_SIZE = 10;
-const ALLOWED_MAPS = new Set(['neon', 'tiburtina', 'knot']);
+const ALLOWED_MAPS = new Set(['neon', 'tiburtina', 'knot', 'overpass']);
 const ALLOWED_LAPS = new Set([1, 3, 5]);
 const MIN_TIME = { 1: 18, 3: 55, 5: 95 };
 

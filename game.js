@@ -114,6 +114,95 @@ const MAPS = [
       new THREE.Vector3(-50, 0, 100),
       new THREE.Vector3(25, 0, 100)
     ]
+  },
+  {
+    // Hand-drawn layout: orange infields, pink = bridge over, blue = under
+    id: 'overpass', name: 'OVERPASS', accent: '#ff7a3d',
+    points: [
+      // --- Start (red) facing +Z ---
+      new THREE.Vector3(40, 0, 20),
+      new THREE.Vector3(35, 8, 90),
+      // Bridge A — pink over (north)
+      new THREE.Vector3(22, 18, 150),
+      new THREE.Vector3(5, 20, 195),
+      new THREE.Vector3(-50, 8, 240),
+
+      // Top-left bulb + wiggles
+      new THREE.Vector3(-120, 0, 265),
+      new THREE.Vector3(-190, 0, 250),
+      new THREE.Vector3(-245, 0, 195),
+      new THREE.Vector3(-255, 0, 130),
+      new THREE.Vector3(-220, 0, 80),
+      new THREE.Vector3(-155, 0, 65),
+      new THREE.Vector3(-115, 0, 105),
+      new THREE.Vector3(-145, 0, 155),
+      new THREE.Vector3(-95, 0, 185),
+      new THREE.Vector3(-35, 0, 170),
+      new THREE.Vector3(5, 0, 140),
+
+      // Bridge A under — blue (SE) through same XZ as over
+      new THREE.Vector3(20, 0, 165),
+      new THREE.Vector3(55, 0, 135),
+      new THREE.Vector3(95, 0, 110),
+
+      // Bridge B — pink over (SE) cross ~140, 50
+      new THREE.Vector3(130, 14, 80),
+      new THREE.Vector3(150, 22, 50),
+      new THREE.Vector3(160, 12, 10),
+
+      // Bridge C — blue under continuing south cross ~160, -40
+      new THREE.Vector3(170, 0, -40),
+      new THREE.Vector3(185, 0, -90),
+      new THREE.Vector3(220, 0, -125),
+
+      // Far-right loop — enter going east then north
+      new THREE.Vector3(280, 0, -100),
+      new THREE.Vector3(330, 0, -40),
+      // Bridge D — blue under going north (cross at ~300, 90)
+      new THREE.Vector3(335, 0, 30),
+      new THREE.Vector3(300, 0, 90),
+      new THREE.Vector3(305, 0, 160),
+      new THREE.Vector3(290, 0, 230),
+      new THREE.Vector3(230, 0, 260),
+      new THREE.Vector3(175, 0, 230),
+      new THREE.Vector3(165, 0, 170),
+      // Bridge D — pink over coming south (same XZ as under)
+      new THREE.Vector3(200, 12, 130),
+      new THREE.Vector3(300, 22, 90),
+      new THREE.Vector3(320, 12, 40),
+      new THREE.Vector3(300, 0, -10),
+      new THREE.Vector3(250, 0, -50),
+
+      // Bottom sweep west — Bridge C pink over (~160, -40)
+      new THREE.Vector3(200, 10, -70),
+      new THREE.Vector3(160, 22, -40),
+      new THREE.Vector3(125, 10, -70),
+      new THREE.Vector3(80, 0, -115),
+      new THREE.Vector3(20, 0, -140),
+      new THREE.Vector3(-50, 0, -145),
+
+      // Toward bottom-left
+      new THREE.Vector3(-120, 0, -125),
+      new THREE.Vector3(-175, 0, -90),
+
+      // Bottom-left loop
+      new THREE.Vector3(-230, 0, -55),
+      new THREE.Vector3(-260, 0, 10),
+      new THREE.Vector3(-245, 0, 70),
+      new THREE.Vector3(-185, 0, 85),
+      new THREE.Vector3(-125, 0, 45),
+      new THREE.Vector3(-95, 0, -15),
+      new THREE.Vector3(-55, 0, -55),
+      new THREE.Vector3(0, 0, -35),
+      new THREE.Vector3(35, 0, 5),
+
+      // Bridge B under — blue north (~150, 50) toward start
+      new THREE.Vector3(70, 0, 25),
+      new THREE.Vector3(120, 0, 45),
+      new THREE.Vector3(150, 0, 50),
+      new THREE.Vector3(100, 0, 30),
+      new THREE.Vector3(55, 0, 5)
+    ]
   }
 ];
 
