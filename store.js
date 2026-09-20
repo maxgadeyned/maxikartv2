@@ -21,7 +21,7 @@ let saving = null;
 let lastStoreError = null;
 
 function emptyStore() {
-  return { users: {}, boards: {}, updatedAt: Date.now() };
+  return { users: {}, boards: {}, meta: {}, updatedAt: Date.now() };
 }
 
 function ensureDir() {
@@ -36,6 +36,7 @@ function loadFile() {
     if (!raw || typeof raw !== 'object') return emptyStore();
     if (!raw.users || typeof raw.users !== 'object') raw.users = {};
     if (!raw.boards || typeof raw.boards !== 'object') raw.boards = {};
+    if (!raw.meta || typeof raw.meta !== 'object') raw.meta = {};
     return raw;
   } catch (_e) {
     return emptyStore();
@@ -80,6 +81,8 @@ async function init() {
     } else {
       console.log('[store] Using local JSON file (set DATABASE_URL for durable cloud storage)');
     }
+    applyBoardWipes();
+    await flush();
     return;
   }
   try {
@@ -103,6 +106,7 @@ async function init() {
       cache = {
         users: raw.users && typeof raw.users === 'object' ? raw.users : {},
         boards: raw.boards && typeof raw.boards === 'object' ? raw.boards : {},
+        meta: raw.meta && typeof raw.meta === 'object' ? raw.meta : {},
         updatedAt: raw.updatedAt || Date.now()
       };
     } else {
@@ -113,6 +117,8 @@ async function init() {
     ready = true;
     lastStoreError = null;
     console.log('[store] Using Postgres (DATABASE_URL) — data survives deploys');
+    applyBoardWipes();
+    await flush();
   } catch (err) {
     lastStoreError = String(err && err.message ? err.message : err).slice(0, 240);
     console.error('[store] Postgres unavailable, falling back to file:', lastStoreError);
@@ -122,6 +128,8 @@ async function init() {
     }
     cache = loadFile();
     ready = true;
+    applyBoardWipes();
+    await flush();
   }
 }
 
@@ -131,6 +139,7 @@ async function persistPostgres(force) {
   const payload = JSON.stringify({
     users: cache.users,
     boards: cache.boards,
+    meta: cache.meta || {},
     updatedAt: cache.updatedAt
   });
   await pool.query(
@@ -362,6 +371,28 @@ function getBoard(mapId, laps) {
   return Array.isArray(board) ? board.slice(0, LEADERBOARD_SIZE) : [];
 }
 
+function clearBoard(mapId, laps) {
+  if (!ALLOWED_MAPS.has(mapId) || !ALLOWED_LAPS.has(laps | 0)) return false;
+  const key = boardKey(mapId, laps | 0);
+  cache.boards[key] = [];
+  save();
+  return true;
+}
+
+/** One-shot wipes (flagged in meta so they only run once per store). */
+function applyBoardWipes() {
+  if (!cache.meta || typeof cache.meta !== 'object') cache.meta = {};
+  let changed = false;
+  // Clear Neon Labyrinth 1-lap tops (pre-gate anticheat / bad times)
+  if (!cache.meta.wipe_neon_1lap_v1) {
+    cache.boards[boardKey('neon', 1)] = [];
+    cache.meta.wipe_neon_1lap_v1 = true;
+    changed = true;
+    console.log('[store] Cleared leaderboard neon / 1 lap');
+  }
+  if (changed) save();
+}
+
 function submitTime(userId, mapId, laps, time) {
   const user = cache.users[userId];
   if (!user) {
@@ -432,6 +463,7 @@ module.exports = {
   getUser,
   setUserName,
   getBoard,
+  clearBoard,
   submitTime,
   sanitizeName,
   claimCoins,

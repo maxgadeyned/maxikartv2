@@ -547,6 +547,12 @@
 
   function lbKey(mapId, laps) { return `kartLB_${mapId}_${laps}`; }
 
+  // One-shot: drop local Neon 1-lap board (same wipe as server)
+  if (!localStorage.getItem('wipe_neon_1lap_v1')) {
+    localStorage.removeItem(lbKey('neon', 1));
+    localStorage.setItem('wipe_neon_1lap_v1', '1');
+  }
+
   function loadBoard(mapId, laps) {
     try {
       const raw = JSON.parse(localStorage.getItem(lbKey(mapId, laps)));
