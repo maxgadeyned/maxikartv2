@@ -497,7 +497,10 @@ window.playLootReveal = playLootReveal;
 let gameState = 'menu'; let previousState = 'menu'; let gameMode = 'free';
 let onlineMenuOpen = false;
 let raceTime = 0; let currentLap = 1; 
-let nextCheckpointIndex = 0; let lastFinishDot = 0;
+let nextGateIndex = 0; let lastFinishDot = 0;
+let gatePrevDots = [];
+/** Max gates you may skip in one hop (apex / short curb cut). Bigger jumps = cut. */
+const MAX_GATE_SKIP = 1;
 let currentRunGhostData = [];
 let lapSplits = []; let lapTimer = 0;
 
@@ -744,7 +747,8 @@ function startGame(mode, opts) {
     window.renderer.setRenderTarget(null);
   }
 
-  raceTime = 0; lapTimer = 0; currentLap = 1; nextCheckpointIndex = 0; currentRunGhostData = []; lapSplits = [];
+  raceTime = 0; lapTimer = 0; currentLap = 1; nextGateIndex = 0; currentRunGhostData = []; lapSplits = [];
+  gatePrevDots = [];
   window.crossedStartLine = false; 
   window.raceTainted = false;
   
@@ -1508,7 +1512,61 @@ function triggerFinish() {
 }
 
 
-function showCheatNote() { window.raceTainted = true; const note = document.getElementById('cheatNote'); note.style.opacity = 1; setTimeout(() => { note.style.opacity = 0; }, 2500); }
+function showCheatNote() {
+  window.raceTainted = true;
+  const note = document.getElementById('cheatNote');
+  if (note) {
+    note.textContent = '⚠ Lap Invalid — Track Cut Detected';
+    note.style.opacity = 1;
+    setTimeout(() => { note.style.opacity = 0; }, 2500);
+  }
+}
+
+function gatePlaneDot(gate, pos) {
+  return (pos.x - gate.x) * gate.nx + (pos.z - gate.z) * gate.nz;
+}
+
+function gateLateralAbs(gate, pos) {
+  // Distance from centerline along the gate (right vector)
+  return Math.abs((pos.x - gate.x) * gate.nz - (pos.z - gate.z) * gate.nx);
+}
+
+/** Advance sequential road gates; allow at most MAX_GATE_SKIP missed for skillful cuts. */
+function updateProgressGates() {
+  const gates = window.progressGates;
+  if (!gates || !gates.length || !window.kart) return;
+  const pos = window.kart.pos;
+
+  while (gatePrevDots.length < gates.length) gatePrevDots.push(null);
+
+  // Look at next gate and up to MAX_GATE_SKIP ahead — crossing a later one
+  // within the road corridor forgives a single missed apex gate.
+  let advanced = false;
+  for (let look = 0; look <= MAX_GATE_SKIP; look++) {
+    const gi = nextGateIndex + look;
+    if (gi >= gates.length) break;
+    const g = gates[gi];
+    const d = gatePlaneDot(g, pos);
+    const prev = gatePrevDots[gi];
+    gatePrevDots[gi] = d;
+    if (prev == null) continue;
+    if (prev < 0 && d >= 0 && gateLateralAbs(g, pos) <= g.halfW) {
+      nextGateIndex = gi + 1;
+      for (let k = 0; k < nextGateIndex; k++) gatePrevDots[k] = null;
+      advanced = true;
+      break;
+    }
+  }
+
+  // Cheap cut: off-road and snapped far ahead past several uncollected gates
+  if (!advanced && !window.raceTainted && nextGateIndex < gates.length) {
+    const nearest = window.kartTrackIndex | 0;
+    const far = gates[Math.min(gates.length - 1, nextGateIndex + 2)];
+    if (far && window.kartOnTrack === false && nearest > far.i + 40) {
+      showCheatNote();
+    }
+  }
+}
 
 // ---------- Input System ----------
 const inputState = { accel: false, brake: false, left: false, right: false, drift: false };
@@ -1901,7 +1959,31 @@ window.addEventListener('keyup', (e) => {
     window.trackStartPos = window.pts[0]; 
     window.trackTangent = trackCurve.getTangent(0);
     window.trackStartHeading = Math.atan2(window.trackTangent.x, window.trackTangent.z);
-    window.checkpoints = [ Math.floor(trackSegments * 0.25), Math.floor(trackSegments * 0.50), Math.floor(trackSegments * 0.75) ];
+
+    // Dense progress gates (virtual pole-pair planes). Must cross in order.
+    // ~16–20 along the lap; half-width is road + small curb so apex cuts still count.
+    const gateCount = 18;
+    const nPts = window.pts.length;
+    const stride = Math.max(36, Math.floor(nPts / (gateCount + 2)));
+    const gates = [];
+    for (let i = stride; i < nPts - Math.floor(stride * 0.35); i += stride) {
+      const pt = window.pts[i];
+      const tangent = trackCurve.getTangent(i / Math.max(1, nPts - 1));
+      let nx = tangent.x, nz = tangent.z;
+      const len = Math.hypot(nx, nz) || 1;
+      nx /= len; nz /= len;
+      gates.push({
+        i,
+        x: pt.x, y: pt.y, z: pt.z,
+        nx, nz,
+        halfW: TRACK_WIDTH * 0.5 + 8
+      });
+    }
+    window.progressGates = gates;
+    // Legacy alias (old 3-sphere checkpoints)
+    window.checkpoints = gates.map(g => g.i);
+    nextGateIndex = 0;
+    gatePrevDots = [];
 
     startLineGroup = new THREE.Group();
     for (let row = 0; row < 2; row++) {
@@ -3093,7 +3175,9 @@ window.addEventListener('keyup', (e) => {
     }
 
     let nearestPt3D = window.pts[nearestIndex];
-    let currentlyOnTrack = minDist2D <= ((TRACK_WIDTH/2) + 2)**2; 
+    let currentlyOnTrack = minDist2D <= ((TRACK_WIDTH/2) + 2)**2;
+    window.kartTrackIndex = nearestIndex;
+    window.kartOnTrack = currentlyOnTrack; 
     
     let groundHeight = nearestPt3D ? nearestPt3D.y : window.kart.pos.y;
     let groundNormal = new THREE.Vector3(0, 1, 0);
@@ -3343,29 +3427,34 @@ window.addEventListener('keyup', (e) => {
     } else { ghostGroup.visible = false; }
 
     if (gameState === 'playing') {
-      if (nextCheckpointIndex < window.checkpoints.length) {
-        const cp = window.pts[window.checkpoints[nextCheckpointIndex]];
-        const cpDistSq = (window.kart.pos.x - cp.x)**2 + (window.kart.pos.z - cp.z)**2;
-        if (cpDistSq < (TRACK_WIDTH * 4.0)**2) {
-          nextCheckpointIndex++;
-        }
-      }
-      
+      updateProgressGates();
+
+      const finishRadius = TRACK_WIDTH * 1.35;
       const vecX = window.kart.pos.x - window.trackStartPos.x;
       const vecZ = window.kart.pos.z - window.trackStartPos.z;
       const currentDot = vecX * window.trackTangent.x + vecZ * window.trackTangent.z;
       const distToStartSq = vecX*vecX + vecZ*vecZ;
 
-      if (distToStartSq < (TRACK_WIDTH * 4.0)**2) {
+      if (distToStartSq < finishRadius * finishRadius) {
         if (lastFinishDot < 0 && currentDot >= 0) {
           if (!window.crossedStartLine) {
             window.crossedStartLine = true;
           } else if (raceTime > 2.0 && gameMode !== 'free') {
-            if (nextCheckpointIndex >= window.checkpoints.length) {
+            const gates = window.progressGates || [];
+            const need = gates.length;
+            if (need === 0 || nextGateIndex >= need) {
               lapSplits.push(lapTimer); lapTimer = 0;
-              if (currentLap < maxLaps) { currentLap++; nextCheckpointIndex = 0; document.getElementById('lapVal').textContent = `${currentLap}/${maxLaps}`; }
-              else { triggerFinish(); }
-            } else { showCheatNote(); }
+              if (currentLap < maxLaps) {
+                currentLap++;
+                nextGateIndex = 0;
+                gatePrevDots = [];
+                document.getElementById('lapVal').textContent = `${currentLap}/${maxLaps}`;
+              } else {
+                triggerFinish();
+              }
+            } else {
+              showCheatNote();
+            }
           }
         }
       }
