@@ -14,7 +14,8 @@ const Auth = require('./auth');
 const PORT = Number(process.env.PORT) || 8765;
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const BUILD = 'sio-db3';
+const BUILD = 'sio-net4';
+const RESUME_GRACE_MS = 15000;
 const DEV_USERNAMES = String(process.env.DEV_USERNAMES || '')
   .split(',')
   .map(s => s.trim().toUpperCase())
@@ -115,6 +116,40 @@ app.post('/api/account/name', (req, res) => {
   }
 });
 
+app.post('/api/economy/claim', (req, res) => {
+  const user = authedUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'auth' });
+  try {
+    const updated = Store.claimCoins(user.id, req.body && req.body.localCoins);
+    res.json({ ok: true, user: publicUser(updated) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'claim-failed' });
+  }
+});
+
+app.post('/api/economy/earn', (req, res) => {
+  const user = authedUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'auth' });
+  try {
+    const updated = Store.addCoins(user.id, req.body && req.body.amount, req.body && req.body.reason);
+    res.json({ ok: true, user: publicUser(updated) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.code || e.message || 'earn-failed' });
+  }
+});
+
+app.post('/api/economy/spend', (req, res) => {
+  const user = authedUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'auth' });
+  try {
+    const updated = Store.spendCoins(user.id, req.body && req.body.amount);
+    res.json({ ok: true, user: publicUser(updated) });
+  } catch (e) {
+    const code = e.code || e.message || 'spend-failed';
+    res.status(code === 'insufficient' ? 402 : 400).json({ ok: false, error: code });
+  }
+});
+
 app.get('/api/leaderboard', (req, res) => {
   const mapId = String(req.query.map || 'neon');
   const laps = parseInt(req.query.laps, 10) || 3;
@@ -163,7 +198,7 @@ const io = new Server(server, {
   pingTimeout: 25000
 });
 
-/** @typedef {{ id: string, name: string, slot: number, host: boolean, ready: boolean }} Player */
+/** @typedef {{ id: string, name: string, slot: number, host: boolean, ready: boolean, look?: object, resume?: string, disconnectedAt?: number|null }} Player */
 /** @typedef {{
  *   code: string,
  *   hostId: string,
@@ -193,7 +228,8 @@ function roster(room) {
       slot: p.slot,
       host: p.host,
       ready: p.ready,
-      look: p.look || null
+      look: p.look || null,
+      disconnected: !!p.disconnectedAt
     }));
 }
 
@@ -219,6 +255,17 @@ function freeSlot(room) {
   return -1;
 }
 
+function promoteHost(room) {
+  const next = [...room.players.values()]
+    .filter(p => !p.disconnectedAt)
+    .sort((a, b) => a.slot - b.slot)[0]
+    || [...room.players.values()].sort((a, b) => a.slot - b.slot)[0];
+  if (!next) return null;
+  room.hostId = next.id;
+  room.players.forEach(p => { p.host = p.id === next.id; });
+  return next;
+}
+
 function destroyRoom(code, reason) {
   const room = rooms.get(code);
   if (!room) return;
@@ -234,6 +281,28 @@ function destroyRoom(code, reason) {
   console.log('room closed', code, reason || '');
 }
 
+function finalizeLeave(room, id, reason) {
+  if (!room || !room.players.has(id)) return;
+  const wasHost = room.hostId === id;
+  room.players.delete(id);
+  console.log('leave', room.code, id, reason || '');
+
+  if (room.players.size === 0) {
+    rooms.delete(room.code);
+    console.log('room closed', room.code, 'empty');
+    return;
+  }
+
+  if (wasHost) {
+    const next = promoteHost(room);
+    if (next) {
+      broadcast(room, { t: 'host', id: next.id, name: next.name });
+      console.log('host →', room.code, next.id);
+    }
+  }
+  pushRoster(room);
+}
+
 function leave(socket, reason) {
   const code = socket.data.mkCode;
   const id = socket.id;
@@ -241,22 +310,42 @@ function leave(socket, reason) {
   const room = rooms.get(code);
   if (!room) return;
 
-  const wasHost = room.hostId === id;
-  room.players.delete(id);
+  const player = room.players.get(id);
   socket.data.mkCode = null;
-  socket.leave(code);
-  console.log('leave', code, id, reason || '');
+  try { socket.leave(code); } catch (_e) {}
 
-  if (wasHost || room.players.size === 0) {
-    destroyRoom(code, 'Host left');
+  // Soft leave: keep seat briefly so a refresh/reconnect can resume
+  if (player && reason !== 'bye' && reason !== 'recreate' && reason !== 'rejoin' && !(reason || '').startsWith('anticheat:')) {
+    const wasHost = room.hostId === id;
+    player.disconnectedAt = Date.now();
+    player.ready = false;
+    player.host = false;
+    if (wasHost) {
+      const next = promoteHost(room);
+      if (next) {
+        broadcast(room, { t: 'host', id: next.id, name: next.name });
+        console.log('host →', room.code, next.id, '(soft)');
+      }
+    }
+    pushRoster(room);
+    setTimeout(() => {
+      const r = rooms.get(code);
+      if (!r) return;
+      const p = r.players.get(id);
+      if (!p || !p.disconnectedAt) return;
+      if (Date.now() - p.disconnectedAt < RESUME_GRACE_MS - 500) return;
+      finalizeLeave(r, id, 'timeout');
+    }, RESUME_GRACE_MS);
     return;
   }
-  pushRoster(room);
+
+  finalizeLeave(room, id, reason);
 }
 
 function allReady(room) {
-  if (room.players.size < 1) return false;
-  for (const p of room.players.values()) {
+  const active = [...room.players.values()].filter(p => !p.disconnectedAt);
+  if (active.length < 1) return false;
+  for (const p of active) {
     if (!p.ready) return false;
   }
   return true;
@@ -305,21 +394,70 @@ io.on('connection', (socket) => {
         racing: false
       };
       room.players.set(socket.id, {
-        id: socket.id, name, slot: 0, host: true, ready: false, look
+        id: socket.id, name, slot: 0, host: true, ready: false, look,
+        resume: randomUUID().replace(/-/g, '').slice(0, 12),
+        disconnectedAt: null
       });
       rooms.set(code, room);
       socket.data.mkCode = code;
       socket.data.ac = AC.createTracker();
       socket.join(code);
       console.log('create', code, socket.id);
+      const me = room.players.get(socket.id);
       emit(socket, {
         t: 'joined',
         role: 'host',
         id: socket.id,
         code,
+        resume: me.resume,
         players: roster(room),
         settings: room.settings
       });
+      return;
+    }
+
+    if (msg.t === 'resume') {
+      if (socket.data.mkCode) leave(socket, 'rejoin');
+      const code = String(msg.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+      const token = String(msg.resume || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      const room = rooms.get(code);
+      if (!room || !token) {
+        emit(socket, { t: 'reject', reason: 'Could not resume — room gone.' });
+        return;
+      }
+      let oldId = null;
+      let player = null;
+      for (const [id, p] of room.players) {
+        if (p.resume === token) { oldId = id; player = p; break; }
+      }
+      if (!player || !player.disconnectedAt) {
+        emit(socket, { t: 'reject', reason: 'Resume expired. Rejoin from lobby.' });
+        return;
+      }
+      room.players.delete(oldId);
+      player.id = socket.id;
+      player.disconnectedAt = null;
+      player.ready = false;
+      if (room.hostId === oldId) room.hostId = socket.id;
+      player.host = room.hostId === socket.id;
+      room.players.set(socket.id, player);
+      socket.data.mkCode = code;
+      socket.data.ac = AC.createTracker();
+      if (room.racing) AC.onRaceStart(socket.data.ac);
+      socket.join(code);
+      console.log('resume', code, oldId, '→', socket.id);
+      emit(socket, {
+        t: 'joined',
+        role: player.host ? 'host' : 'client',
+        id: socket.id,
+        code,
+        resume: player.resume,
+        racing: !!room.racing,
+        players: roster(room),
+        settings: room.settings
+      });
+      if (player.host) broadcast(room, { t: 'host', id: socket.id, name: player.name }, socket.id);
+      pushRoster(room);
       return;
     }
 
@@ -335,7 +473,8 @@ io.on('connection', (socket) => {
         emit(socket, { t: 'reject', reason: 'Race already started.' });
         return;
       }
-      if (room.players.size >= MAX_PLAYERS) {
+      const liveCount = [...room.players.values()].filter(p => !p.disconnectedAt).length;
+      if (liveCount >= MAX_PLAYERS) {
         emit(socket, { t: 'reject', reason: 'Room full' });
         return;
       }
@@ -347,17 +486,21 @@ io.on('connection', (socket) => {
       const name = AC.sanitizeName(msg.name);
       const look = AC.sanitizeLook(msg.look);
       room.players.set(socket.id, {
-        id: socket.id, name, slot, host: false, ready: false, look
+        id: socket.id, name, slot, host: false, ready: false, look,
+        resume: randomUUID().replace(/-/g, '').slice(0, 12),
+        disconnectedAt: null
       });
       socket.data.mkCode = code;
       socket.data.ac = AC.createTracker();
       socket.join(code);
       console.log('join', code, socket.id);
+      const me = room.players.get(socket.id);
       emit(socket, {
         t: 'joined',
         role: 'client',
         id: socket.id,
         code,
+        resume: me.resume,
         players: roster(room),
         settings: room.settings
       });
@@ -444,6 +587,36 @@ io.on('connection', (socket) => {
         id: socket.id,
         name: me.name
       }), socket.id);
+      return;
+    }
+
+    if (msg.t === 'hz') {
+      if (!room.racing || !room.settings.items) return;
+      const packet = AC.sanitizeHazard(msg);
+      if (!packet) return;
+      packet.owner = socket.id;
+      broadcast(room, packet, socket.id);
+      return;
+    }
+
+    if (msg.t === 'hzgone') {
+      if (!room.racing) return;
+      const packet = AC.sanitizeHzGone(msg);
+      if (!packet) return;
+      packet.by = socket.id;
+      broadcast(room, packet, socket.id);
+      return;
+    }
+
+    if (msg.t === 'spin') {
+      if (!room.racing || !room.settings.items) return;
+      const packet = AC.sanitizeSpin(msg);
+      if (!packet) return;
+      if (!room.players.has(packet.target)) return;
+      packet.from = socket.id;
+      // Deliver to target (and optionally others for FX); target applies the hit
+      const targetSock = io.sockets.sockets.get(packet.target);
+      if (targetSock) emit(targetSock, packet);
       return;
     }
 

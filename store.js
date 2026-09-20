@@ -185,7 +185,8 @@ function publicUser(u) {
     id: u.id,
     name: u.name,
     provider: u.provider,
-    createdAt: u.createdAt
+    createdAt: u.createdAt,
+    coins: Math.max(0, Math.round(Number(u.coins) || 0))
   };
 }
 
@@ -228,7 +229,8 @@ function createUser(name, password) {
     name: clean,
     passSalt: salt,
     passHash: hashSecret(pass, salt),
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    coins: 0
   };
   cache.users[user.id] = user;
   save();
@@ -266,6 +268,76 @@ function loginUser(name, password) {
 
 function getUser(id) {
   return cache.users[id] || null;
+}
+
+function ensureCoins(user) {
+  if (!user) return 0;
+  if (!Number.isFinite(user.coins) || user.coins < 0) user.coins = 0;
+  return user.coins;
+}
+
+/** Merge guest local balance once, then server is source of truth. */
+function claimCoins(userId, localBalance) {
+  const user = cache.users[userId];
+  if (!user) {
+    const err = new Error('auth');
+    err.code = 'auth';
+    throw err;
+  }
+  ensureCoins(user);
+  const local = Math.max(0, Math.min(500000, Math.round(Number(localBalance) || 0)));
+  if (local > user.coins) {
+    user.coins = local;
+    save();
+  }
+  return publicUser(user);
+}
+
+function addCoins(userId, amount, reason) {
+  const user = cache.users[userId];
+  if (!user) {
+    const err = new Error('auth');
+    err.code = 'auth';
+    throw err;
+  }
+  ensureCoins(user);
+  let n = Math.round(Number(amount) || 0);
+  if (!Number.isFinite(n) || n <= 0) {
+    const err = new Error('bad-amount');
+    err.code = 'bad-amount';
+    throw err;
+  }
+  // Cap single earn; reason used for light abuse guard
+  const why = String(reason || '').slice(0, 32);
+  const cap = why === 'loot-refund' ? 500 : why === 'dev' ? 99999 : 400;
+  n = Math.min(n, cap);
+  user.coins = Math.min(1000000, user.coins + n);
+  save();
+  return publicUser(user);
+}
+
+function spendCoins(userId, amount) {
+  const user = cache.users[userId];
+  if (!user) {
+    const err = new Error('auth');
+    err.code = 'auth';
+    throw err;
+  }
+  ensureCoins(user);
+  const n = Math.round(Number(amount) || 0);
+  if (!Number.isFinite(n) || n <= 0) {
+    const err = new Error('bad-amount');
+    err.code = 'bad-amount';
+    throw err;
+  }
+  if (user.coins < n) {
+    const err = new Error('insufficient');
+    err.code = 'insufficient';
+    throw err;
+  }
+  user.coins -= n;
+  save();
+  return publicUser(user);
 }
 
 function setUserName(userId, name) {
@@ -361,5 +433,8 @@ module.exports = {
   setUserName,
   getBoard,
   submitTime,
-  sanitizeName
+  sanitizeName,
+  claimCoins,
+  addCoins,
+  spendCoins
 };

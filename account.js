@@ -33,6 +33,7 @@
     if (user && user.name) applyNameLocally(user.name);
     refreshAccountUI();
     syncNameInputs();
+    if (token && user && window.syncWalletFromAccount) window.syncWalletFromAccount();
   }
 
   function applyNameLocally(name) {
@@ -71,6 +72,7 @@
       if (res.ok && body && body.user) {
         Account.user = body.user;
         applyNameLocally(body.user.name);
+        if (window.syncWalletFromAccount) window.syncWalletFromAccount();
       } else {
         saveSession(null, null);
       }

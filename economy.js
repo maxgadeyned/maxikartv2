@@ -26,9 +26,69 @@
     return Number.isFinite(v) ? v : 0;
   }
   let coins = loadCoins();
+  let serverSynced = false;
+
   function saveCoins() { localStorage.setItem('kartCoins', String(coins)); refreshCoinUI(); }
-  function addCoins(n) { coins = Math.max(0, coins + Math.round(n)); saveCoins(); }
-  function spendCoins(n) { if (coins < n) return false; coins -= n; saveCoins(); return true; }
+
+  function applyServerCoins(n) {
+    coins = Math.max(0, Math.round(Number(n) || 0));
+    serverSynced = true;
+    saveCoins();
+  }
+
+  async function apiEconomy(path, body) {
+    if (!window.Account || !Account.isSignedIn || !Account.isSignedIn()) return null;
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + Account.token
+        },
+        body: JSON.stringify(body || {})
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.ok) return { ok: false, error: data && data.error };
+      if (data.user && data.user.coins != null) applyServerCoins(data.user.coins);
+      return data;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function addCoins(n, reason) {
+    const amt = Math.round(n);
+    if (amt <= 0) return;
+    coins = Math.max(0, coins + amt);
+    saveCoins();
+    if (window.Account && Account.isSignedIn && Account.isSignedIn()) {
+      apiEconomy('/api/economy/earn', { amount: amt, reason: reason || 'race' });
+    }
+  }
+
+  function spendCoins(n) {
+    const amt = Math.round(n);
+    if (amt <= 0) return true;
+    if (coins < amt) return false;
+    coins -= amt;
+    saveCoins();
+    if (window.Account && Account.isSignedIn && Account.isSignedIn()) {
+      apiEconomy('/api/economy/spend', { amount: amt }).then(r => {
+        if (r && r.ok === false && r.error === 'insufficient') {
+          // Server rejected — reload balance on next claim
+        }
+      });
+    }
+    return true;
+  }
+
+  /** Pull server wallet after login; keep the higher of local vs server once. */
+  async function syncWalletFromAccount() {
+    if (!window.Account || !Account.isSignedIn || !Account.isSignedIn()) return;
+    const data = await apiEconomy('/api/economy/claim', { localCoins: coins });
+    if (data && data.user && data.user.coins != null) applyServerCoins(data.user.coins);
+  }
+  window.syncWalletFromAccount = syncWalletFromAccount;
 
   function refreshCoinUI() {
     document.querySelectorAll('.coin-value').forEach(el => el.textContent = coins.toLocaleString());
@@ -183,13 +243,29 @@
   window.onRaceFinish = function(result) {
     tryCompleteChallenge(result);
 
-    if (result.mode !== 'timed') return;
     const note = document.getElementById('finishCoinsEarned');
     if (result.tainted) {
       if (note) note.textContent = 'Run invalid — no coins (track cut detected)';
       return;
     }
-    const payout = computePayout(result.mapId, result.time, result.laps);
+
+    let payout = 0;
+    if (result.mode === 'timed') {
+      payout = computePayout(result.mapId, result.time, result.laps);
+    } else if (result.mode === 'online' || result.mode === 'multiplayer') {
+      const place = Math.max(1, result.place | 0 || 4);
+      const base = Math.round((MAP_PAYOUT[result.mapId] || 40) * 0.55);
+      const placeMult = place === 1 ? 1.5 : place === 2 ? 1.15 : place === 3 ? 0.9 : 0.65;
+      payout = Math.max(8, Math.round(base * placeMult));
+    } else if (result.mode === 'free') {
+      return;
+    } else {
+      // local vs AI etc.
+      const place = Math.max(1, result.place | 0 || 4);
+      payout = Math.max(5, Math.round((MAP_PAYOUT[result.mapId] || 40) * (place === 1 ? 0.45 : 0.25)));
+    }
+
+    if (payout <= 0) return;
     addCoins(payout);
     if (note) {
       const extra = note.textContent && note.textContent.indexOf('Daily') >= 0 ? ' · ' + note.textContent : '';
@@ -241,7 +317,7 @@
     let dupeRefund = 0;
     if (alreadyOwned) {
       dupeRefund = DUPLICATE_REFUND[rarity] || 0;
-      addCoins(dupeRefund);
+      addCoins(dupeRefund, 'loot-refund');
     } else {
       window.Cosmetics.grantItem(item.id);
     }
@@ -637,7 +713,7 @@
         return coins;
       }
       const n = Math.max(0, Math.round(Number(amount) || 0));
-      addCoins(n);
+      addCoins(n, 'dev');
       const note = document.getElementById('devToolsNote');
       if (note) note.textContent = `Added ${n.toLocaleString()} coins. Balance: ${coins.toLocaleString()}`;
       return coins;

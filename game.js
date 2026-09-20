@@ -643,6 +643,7 @@ function closeOnlineMenu() {
 }
 
 function startGame(mode, opts) {
+  if (window.bindNetCombat) window.bindNetCombat();
   if (document.activeElement) document.activeElement.blur();
   gameMode = mode;
   const skipIntro = !!(opts && opts.skipIntro);
@@ -2330,44 +2331,132 @@ window.addEventListener('keyup', (e) => {
     }
   }
 
-  function dropBanana(fromPos, heading, owner) {
+  function dropBanana(fromPos, heading, owner, opts) {
+    opts = opts || {};
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.35, 8, 6),
       new THREE.MeshStandardMaterial({ color: 0xffe066, roughness: 0.4 })
     );
     mesh.scale.set(1, 0.55, 1.2);
-    const fw = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    mesh.position.copy(fromPos).addScaledVector(fw, -2.2);
-    mesh.position.y += 0.25;
+    if (opts.pos) {
+      mesh.position.copy(opts.pos);
+    } else {
+      const fw = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+      mesh.position.copy(fromPos).addScaledVector(fw, -2.2);
+      mesh.position.y += 0.25;
+    }
     scene.add(mesh);
-    window.raceHazards.bananas.push({ mesh, pos: mesh.position.clone(), life: 45, owner });
+    const id = opts.id || (window.Net && Net.isOnline() ? Net.newHazardId() : null);
+    window.raceHazards.bananas.push({ mesh, pos: mesh.position.clone(), life: 45, owner, id, fromNet: !!opts.fromNet });
+    if (id && !opts.fromNet && window.Net && Net.isOnline() && Net.inRace()) {
+      Net.sendHazard({
+        kind: 'banana', id,
+        x: mesh.position.x, y: mesh.position.y, z: mesh.position.z,
+        h: heading, vx: 0, vz: 0
+      });
+    }
+    return id;
   }
 
-  function fireShell(fromPos, heading, owner) {
+  function fireShell(fromPos, heading, owner, opts) {
+    opts = opts || {};
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.4, 10, 8),
       new THREE.MeshStandardMaterial({ color: 0x3ecf6a, emissive: 0x1a7a3a, emissiveIntensity: 0.6 })
     );
-    const fw = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    mesh.position.copy(fromPos).addScaledVector(fw, 2.5);
-    mesh.position.y += 0.4;
+    let fw = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    if (opts.pos) {
+      mesh.position.copy(opts.pos);
+    } else {
+      mesh.position.copy(fromPos).addScaledVector(fw, 2.5);
+      mesh.position.y += 0.4;
+    }
+    if (opts.vx != null && opts.vz != null) {
+      fw = new THREE.Vector3(opts.vx, 0, opts.vz);
+    } else {
+      fw = fw.multiplyScalar(48);
+    }
     scene.add(mesh);
+    const id = opts.id || (window.Net && Net.isOnline() ? Net.newHazardId() : null);
     window.raceHazards.shells.push({
-      mesh, pos: mesh.position.clone(), vel: fw.multiplyScalar(48), life: 4.5, owner
+      mesh, pos: mesh.position.clone(), vel: fw, life: 4.5, owner, id, fromNet: !!opts.fromNet
     });
+    if (id && !opts.fromNet && window.Net && Net.isOnline() && Net.inRace()) {
+      Net.sendHazard({
+        kind: 'shell', id,
+        x: mesh.position.x, y: mesh.position.y, z: mesh.position.z,
+        h: heading, vx: fw.x, vz: fw.z
+      });
+    }
+    return id;
   }
 
-  function dropFakeBox(fromPos, heading, owner) {
+  function dropFakeBox(fromPos, heading, owner, opts) {
+    opts = opts || {};
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1.6, 1.6, 1.6),
       new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffa500, transparent: true, opacity: 0.85 })
     );
-    const fw = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    mesh.position.copy(fromPos).addScaledVector(fw, -2.5);
-    mesh.position.y += 1.2;
+    if (opts.pos) {
+      mesh.position.copy(opts.pos);
+    } else {
+      const fw = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+      mesh.position.copy(fromPos).addScaledVector(fw, -2.5);
+      mesh.position.y += 1.2;
+    }
     scene.add(mesh);
-    window.raceHazards.fakeBoxes.push({ mesh, pos: mesh.position.clone(), life: 50, owner });
+    const id = opts.id || (window.Net && Net.isOnline() ? Net.newHazardId() : null);
+    window.raceHazards.fakeBoxes.push({ mesh, pos: mesh.position.clone(), life: 50, owner, id, fromNet: !!opts.fromNet });
+    if (id && !opts.fromNet && window.Net && Net.isOnline() && Net.inRace()) {
+      Net.sendHazard({
+        kind: 'fake', id,
+        x: mesh.position.x, y: mesh.position.y, z: mesh.position.z,
+        h: heading, vx: 0, vz: 0
+      });
+    }
+    return id;
   }
+
+  function removeHazardById(id, broadcast) {
+    if (!id) return false;
+    const h = window.raceHazards;
+    for (const list of [h.bananas, h.shells, h.fakeBoxes]) {
+      const idx = list.findIndex(o => o.id === id);
+      if (idx >= 0) {
+        scene.remove(list[idx].mesh);
+        list.splice(idx, 1);
+        if (broadcast && window.Net && Net.isOnline()) Net.removeHazard(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function ingestNetHazard(data) {
+    if (!data || data.t !== 'hz') return;
+    if (data.owner && window.Net && data.owner === Net.localId) return;
+    const pos = new THREE.Vector3(data.x, data.y, data.z);
+    const opts = { id: data.id, fromNet: true, pos };
+    if (data.kind === 'banana') dropBanana(pos, data.h || 0, data.owner || 'net', opts);
+    else if (data.kind === 'shell') fireShell(pos, data.h || 0, data.owner || 'net', Object.assign(opts, { vx: data.vx, vz: data.vz }));
+    else if (data.kind === 'fake') dropFakeBox(pos, data.h || 0, data.owner || 'net', opts);
+  }
+
+  function bindNetCombat() {
+    if (!window.Net || window._netCombatBound) return;
+    window._netCombatBound = true;
+    Net.onHazard(function (data) {
+      if (data.t === 'hz') ingestNetHazard(data);
+      else if (data.t === 'hzgone') removeHazardById(data.id, false);
+    });
+    Net.onSpin(function (data) {
+      if (!data || data.target !== Net.localId) return;
+      spinOut(window.kart, data.secs || 1.1);
+    });
+  }
+  window.bindNetCombat = bindNetCombat;
+  setTimeout(bindNetCombat, 0);
+  setTimeout(bindNetCombat, 200);
 
   function refreshPlayerItemHud() {
     const slot = document.getElementById('hudItemSlot');
@@ -2431,14 +2520,14 @@ window.addEventListener('keyup', (e) => {
       }
       if (window.playBoostWhoosh) window.playBoostWhoosh();
     } else if (item === 'GREEN_SHELL') {
-      fireShell(pos, heading, isPlayer ? 'player' : racer);
+      fireShell(pos, heading, isPlayer ? (window.Net && Net.isOnline() ? Net.localId : 'player') : racer);
     } else if (item === 'BANANA') {
-      dropBanana(pos, heading, isPlayer ? 'player' : racer);
+      dropBanana(pos, heading, isPlayer ? (window.Net && Net.isOnline() ? Net.localId : 'player') : racer);
     } else if (item === 'SHIELD') {
       if (isPlayer) window.kart.shieldTimer = 5.5;
       else racer.shieldTimer = 5.5;
     } else if (item === 'FAKE_BOX') {
-      dropFakeBox(pos, heading, isPlayer ? 'player' : racer);
+      dropFakeBox(pos, heading, isPlayer ? (window.Net && Net.isOnline() ? Net.localId : 'player') : racer);
     }
   }
 
@@ -2466,17 +2555,40 @@ window.addEventListener('keyup', (e) => {
 
   function updateHazards(dt) {
     const h = window.raceHazards;
+    const online = gameMode === 'online' && window.Net && Net.isOnline();
+    const localOwner = online ? Net.localId : 'player';
+
     // bananas
     for (let i = h.bananas.length - 1; i >= 0; i--) {
       const b = h.bananas[i];
       b.life -= dt;
       if (b.life <= 0) { scene.remove(b.mesh); h.bananas.splice(i, 1); continue; }
-      const hitPlayer = window.kart.pos.distanceTo(b.mesh.position) < 1.6 && window.kart.spinTimer <= 0;
-      if (hitPlayer) { spinOut(window.kart, 1.0); scene.remove(b.mesh); h.bananas.splice(i, 1); continue; }
+      const hitPlayer = b.owner !== localOwner && b.owner !== 'player'
+        && window.kart.pos.distanceTo(b.mesh.position) < 1.6 && window.kart.spinTimer <= 0;
+      // Own banana: only hurt others (and self after a beat — keep simple: never self)
+      const hitSelf = (b.owner === localOwner || b.owner === 'player')
+        && window.kart.pos.distanceTo(b.mesh.position) < 1.6 && window.kart.spinTimer <= 0
+        && b.life < 43.5;
+      if (hitPlayer || hitSelf) {
+        spinOut(window.kart, 1.0);
+        if (b.id && online) Net.removeHazard(b.id);
+        scene.remove(b.mesh); h.bananas.splice(i, 1); continue;
+      }
       for (const ai of aiRacers) {
         if (ai.finished) continue;
         if (ai.pos.distanceTo(b.mesh.position) < 1.6 && ai.spinTimer <= 0) {
           spinOut(ai, 1.0); scene.remove(b.mesh); h.bananas.splice(i, 1); break;
+        }
+      }
+      if (online) {
+        for (const r of netRemotes) {
+          if (r.finished || !r.mesh.visible) continue;
+          if (b.owner === r.id) continue;
+          if (r.pos.distanceTo(b.mesh.position) < 1.6) {
+            Net.sendSpin(r.id, 1.0);
+            if (b.id) Net.removeHazard(b.id);
+            scene.remove(b.mesh); h.bananas.splice(i, 1); break;
+          }
         }
       }
     }
@@ -2488,13 +2600,26 @@ window.addEventListener('keyup', (e) => {
       s.mesh.rotation.y += dt * 10;
       if (s.life <= 0) { scene.remove(s.mesh); h.shells.splice(i, 1); continue; }
       let removed = false;
-      if (s.owner !== 'player' && window.kart.pos.distanceTo(s.mesh.position) < 1.8) {
+      const shellOwnerLocal = s.owner === localOwner || s.owner === 'player';
+      if (!shellOwnerLocal && window.kart.pos.distanceTo(s.mesh.position) < 1.8) {
         spinOut(window.kart, 1.2); removed = true;
+        if (s.id && online) Net.removeHazard(s.id);
       }
       for (const ai of aiRacers) {
         if (removed || ai.finished) continue;
         if (s.owner === ai) continue;
         if (ai.pos.distanceTo(s.mesh.position) < 1.8) { spinOut(ai, 1.2); removed = true; }
+      }
+      if (online && !removed) {
+        for (const r of netRemotes) {
+          if (r.finished || !r.mesh.visible) continue;
+          if (s.owner === r.id) continue;
+          if (r.pos.distanceTo(s.mesh.position) < 1.8) {
+            Net.sendSpin(r.id, 1.2);
+            if (s.id) Net.removeHazard(s.id);
+            removed = true; break;
+          }
+        }
       }
       if (removed) { scene.remove(s.mesh); h.shells.splice(i, 1); }
     }
@@ -2504,8 +2629,16 @@ window.addEventListener('keyup', (e) => {
       f.life -= dt;
       f.mesh.rotation.y += dt * 2;
       if (f.life <= 0) { scene.remove(f.mesh); h.fakeBoxes.splice(i, 1); continue; }
-      if (window.kart.pos.distanceTo(f.mesh.position) < 2.2 && window.kart.spinTimer <= 0) {
-        spinOut(window.kart, 1.3); scene.remove(f.mesh); h.fakeBoxes.splice(i, 1); continue;
+      const fakeOwnerLocal = f.owner === localOwner || f.owner === 'player';
+      if (!fakeOwnerLocal && window.kart.pos.distanceTo(f.mesh.position) < 2.2 && window.kart.spinTimer <= 0) {
+        spinOut(window.kart, 1.3);
+        if (f.id && online) Net.removeHazard(f.id);
+        scene.remove(f.mesh); h.fakeBoxes.splice(i, 1); continue;
+      }
+      if (fakeOwnerLocal && window.kart.pos.distanceTo(f.mesh.position) < 2.2 && window.kart.spinTimer <= 0 && f.life < 48) {
+        spinOut(window.kart, 1.3);
+        if (f.id && online) Net.removeHazard(f.id);
+        scene.remove(f.mesh); h.fakeBoxes.splice(i, 1); continue;
       }
       for (const ai of aiRacers) {
         if (ai.finished) continue;
@@ -2513,6 +2646,34 @@ window.addEventListener('keyup', (e) => {
           spinOut(ai, 1.3); scene.remove(f.mesh); h.fakeBoxes.splice(i, 1); break;
         }
       }
+      if (online) {
+        for (const r of netRemotes) {
+          if (r.finished || !r.mesh.visible) continue;
+          if (f.owner === r.id) continue;
+          if (r.pos.distanceTo(f.mesh.position) < 2.2) {
+            Net.sendSpin(r.id, 1.3);
+            if (f.id) Net.removeHazard(f.id);
+            scene.remove(f.mesh); h.fakeBoxes.splice(i, 1); break;
+          }
+        }
+      }
+    }
+  }
+
+  function resolveNetBump(dt) {
+    if (gameMode !== 'online' || !window.kart) return;
+    for (const r of netRemotes) {
+      if (!r.mesh.visible || r.finished) continue;
+      const dx = window.kart.pos.x - r.pos.x;
+      const dz = window.kart.pos.z - r.pos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.05 || dist > 2.4) continue;
+      const push = (2.4 - dist) * 0.55;
+      const nx = dx / dist;
+      const nz = dz / dist;
+      window.kart.pos.x += nx * push * Math.min(1, dt * 12);
+      window.kart.pos.z += nz * push * Math.min(1, dt * 12);
+      if (window.kart.speedForward > 8) window.kart.speedForward *= 0.92;
     }
   }
 
@@ -3435,7 +3596,7 @@ window.addEventListener('keyup', (e) => {
       if (gameState === 'intro' && window.updateRaceIntro) window.updateRaceIntro(dt);
       if (gameState === 'countdown') pollStartBoostInput();
       if (!window.replaying) {
-        updateKart(dt); updateRaceLogic(dt); updateAIRacers(dt); updateNetRemotes(dt); updateHazards(dt);
+        updateKart(dt); updateRaceLogic(dt); updateAIRacers(dt); updateNetRemotes(dt); updateHazards(dt); resolveNetBump(dt);
         if (gameMode === 'online' && window.Net && (gameState === 'playing' || gameState === 'countdown' || gameState === 'intro' || gameState === 'finished' || gameState === 'spectating')) {
           Net.pushLocalState({
             x: window.kart.pos.x, y: window.kart.pos.y, z: window.kart.pos.z,

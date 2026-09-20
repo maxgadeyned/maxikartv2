@@ -10,18 +10,49 @@
     roomCode: null,
     localId: null,
     localName: 'RACER',
+    resumeToken: null,
     players: new Map(),
     remoteStates: new Map(),
     lobbyCbs: [],
     startCbs: [],
     discCbs: [],
+    hazardCbs: [],
+    spinCbs: [],
     pingMs: 0,
     _lastSend: 0,
     _raceLive: false,
     _pingSentAt: 0,
     _pingTimer: null,
-    _intentionalLeave: false
+    _intentionalLeave: false,
+    _resuming: false
   };
+
+  const RESUME_KEY = 'mkResume';
+
+  function saveResume() {
+    if (!Net.roomCode || !Net.resumeToken) return;
+    try {
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({
+        code: Net.roomCode,
+        resume: Net.resumeToken,
+        name: Net.localName,
+        racing: !!Net._raceLive
+      }));
+    } catch (_e) {}
+  }
+
+  function clearResume() {
+    try { sessionStorage.removeItem(RESUME_KEY); } catch (_e) {}
+  }
+
+  function loadResume() {
+    try {
+      const raw = sessionStorage.getItem(RESUME_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_e) {
+      return null;
+    }
+  }
 
   function ensurePageOk() {
     if (window.location.protocol === 'http:' || window.location.protocol === 'https:') return true;
@@ -46,8 +77,9 @@
   }
 
   function allPlayersReady() {
-    if (Net.players.size === 0) return false;
-    for (const p of Net.players.values()) if (!p.ready) return false;
+    const live = [...Net.players.values()].filter(p => !p.disconnected);
+    if (live.length === 0) return false;
+    for (const p of live) if (!p.ready) return false;
     return true;
   }
 
@@ -56,26 +88,27 @@
     const codeEl = document.getElementById('netRoomCode');
     const pingEl = document.getElementById('netPing');
     const statusEl = document.getElementById('netLobbyStatus');
-    const readyCount = list.filter(p => p.ready).length;
+    const readyCount = list.filter(p => p.ready && !p.disconnected).length;
+    const liveCount = list.filter(p => !p.disconnected).length;
     if (codeEl) codeEl.textContent = Net.roomCode || '----';
     if (pingEl) pingEl.textContent = Net.pingMs ? (Net.pingMs + ' ms') : '—';
     if (statusEl) {
       if (!Net.role) statusEl.textContent = 'Connecting…';
       else if (Net.role === 'host') {
-        statusEl.textContent = list.length <= 1
+        statusEl.textContent = liveCount <= 1
           ? (list[0] && list[0].ready ? 'Ready — waiting for racers…' : 'Mark ready when you’re set')
-          : `${readyCount}/${list.length} ready`;
+          : `${readyCount}/${liveCount} ready`;
       } else {
-        statusEl.textContent = `${readyCount}/${list.length} ready — waiting for host`;
+        statusEl.textContent = `${readyCount}/${liveCount} ready — waiting for host`;
       }
     }
     if (el) {
       el.innerHTML = list.map(p =>
-        `<div class="net-player-row${p.you ? ' you' : ''}${p.ready ? ' ready' : ''}">
+        `<div class="net-player-row${p.you ? ' you' : ''}${p.ready ? ' ready' : ''}${p.disconnected ? ' dim' : ''}">
           <span class="net-slot">P${p.slot + 1}</span>
-          <span class="net-name">${p.name}${p.you ? ' (YOU)' : ''}</span>
+          <span class="net-name">${p.name}${p.you ? ' (YOU)' : ''}${p.disconnected ? ' …' : ''}</span>
           ${p.host ? '<span class="net-host-tag">HOST</span>' : ''}
-          <span class="net-ready-tag${p.ready ? ' on' : ''}">${p.ready ? 'READY' : 'NOT READY'}</span>
+          <span class="net-ready-tag${p.ready ? ' on' : ''}">${p.disconnected ? 'RECONNECTING' : (p.ready ? 'READY' : 'NOT READY')}</span>
         </div>`
       ).join('');
     }
@@ -105,9 +138,11 @@
     (players || []).forEach(p => {
       Net.players.set(p.id, {
         id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready,
-        look: p.look || null
+        look: p.look || null, disconnected: !!p.disconnected
       });
     });
+    const me = Net.localId ? Net.players.get(Net.localId) : null;
+    if (me) Net.role = me.host ? 'host' : 'client';
     emitLobby();
   }
 
@@ -194,7 +229,7 @@
       .sort((a, b) => a.slot - b.slot)
       .map(p => ({
         id: p.id, name: p.name, slot: p.slot, host: !!p.host, ready: !!p.ready,
-        look: p.look || null,
+        look: p.look || null, disconnected: !!p.disconnected,
         you: p.id === Net.localId
       }));
   }
@@ -239,16 +274,37 @@
       Net.role = data.role;
       Net.localId = data.id;
       Net.roomCode = data.code;
+      if (data.resume) Net.resumeToken = data.resume;
+      Net._resuming = false;
       applyRoster(data.players);
       if (data.settings) applyLobbySettings(data.settings);
       if (Net.role === 'host') syncLobbySettings();
+      saveResume();
       startPing();
+      if (data.racing) Net._raceLive = true;
       return;
     }
 
     if (data.t === 'roster') {
       if (data.code) Net.roomCode = data.code;
       applyRoster(data.players);
+      saveResume();
+      return;
+    }
+
+    if (data.t === 'host') {
+      if (data.id === Net.localId) {
+        Net.role = 'host';
+        const me = Net.players.get(Net.localId);
+        if (me) me.host = true;
+        Net.players.forEach(p => { if (p.id !== Net.localId) p.host = false; });
+        refreshLobbyDOM(getPlayers());
+      } else {
+        Net.role = 'client';
+        Net.players.forEach(p => { p.host = p.id === data.id; });
+        refreshLobbyDOM(getPlayers());
+      }
+      saveResume();
       return;
     }
 
@@ -259,6 +315,7 @@
 
     if (data.t === 'start') {
       Net._raceLive = true;
+      saveResume();
       Net.startCbs.forEach(cb => { try { cb(data); } catch (e) {} });
       return;
     }
@@ -269,11 +326,22 @@
       if (data.settings) applyLobbySettings(data.settings);
       if (typeof enterOnlineLobbyUI === 'function') enterOnlineLobbyUI();
       emitLobby();
+      saveResume();
       return;
     }
 
     if (data.t === 's') {
       ingestRemoteState(data);
+      return;
+    }
+
+    if (data.t === 'hz' || data.t === 'hzgone') {
+      Net.hazardCbs.forEach(cb => { try { cb(data); } catch (e) {} });
+      return;
+    }
+
+    if (data.t === 'spin') {
+      Net.spinCbs.forEach(cb => { try { cb(data); } catch (e) {} });
       return;
     }
 
@@ -289,6 +357,11 @@
     }
 
     if (data.t === 'reject') {
+      if (Net._resuming) {
+        Net._resuming = false;
+        clearResume();
+        return;
+      }
       alert(data.reason || 'Could not join');
       if (!Net.localId) {
         leave();
@@ -299,6 +372,7 @@
 
     if (data.t === 'bye') {
       const reason = data.reason || 'Disconnected';
+      clearResume();
       cleanup(false);
       alert(reason);
       if (typeof quitToMenu === 'function' && typeof gameState !== 'undefined' && gameState !== 'menu') quitToMenu();
@@ -321,6 +395,7 @@
     if (sendBye && Net.socket && Net.socket.connected) {
       try { Net.socket.emit('msg', { t: 'bye' }); } catch (e) {}
     }
+    if (sendBye) clearResume();
     if (Net.socket) {
       try {
         Net.socket.removeAllListeners();
@@ -331,15 +406,63 @@
     Net.role = null;
     Net.roomCode = null;
     Net.localId = null;
+    Net.resumeToken = null;
     Net.players.clear();
     Net.remoteStates.clear();
     Net._raceLive = false;
     Net.pingMs = 0;
     Net._intentionalLeave = false;
+    Net._resuming = false;
     emitLobby();
   }
 
   function leave() { cleanup(true); }
+
+  function failDisconnect() {
+    clearResume();
+    const wasRacing = Net._raceLive;
+    cleanup(false);
+    Net.discCbs.forEach(cb => { try { cb(); } catch (e) {} });
+    if (wasRacing && typeof quitToMenu === 'function' && typeof gameState !== 'undefined' && gameState !== 'menu') {
+      quitToMenu();
+    } else {
+      navTo('menu-multi');
+    }
+    const statusEl = document.getElementById('netLobbyStatus');
+    if (statusEl) statusEl.textContent = 'Disconnected from server.';
+  }
+
+  function attemptResume() {
+    const code = Net.roomCode;
+    const token = Net.resumeToken;
+    if (!code || !token) {
+      failDisconnect();
+      return;
+    }
+    saveResume();
+    Net._resuming = true;
+    if (Net.socket) {
+      try { Net.socket.removeAllListeners(); } catch (_e) {}
+      Net.socket = null;
+    }
+    connectSocket()
+      .then(() => {
+        send({ t: 'resume', code, resume: token, name: Net.localName });
+        setTimeout(() => {
+          if (!Net._resuming) return;
+          if (Net.localId && Net.socket && Net.socket.connected) {
+            Net._resuming = false;
+          } else {
+            Net._resuming = false;
+            failDisconnect();
+          }
+        }, 4500);
+      })
+      .catch(() => {
+        Net._resuming = false;
+        failDisconnect();
+      });
+  }
 
   function connectSocket() {
     return new Promise((resolve, reject) => {
@@ -373,14 +496,9 @@
       });
 
       socket.on('disconnect', () => {
-        if (Net._intentionalLeave) return;
+        if (Net._intentionalLeave || Net._resuming) return;
         if (!Net.role) return;
-        const was = Net.role;
-        cleanup(false);
-        Net.discCbs.forEach(cb => { try { cb(); } catch (e) {} });
-        alert('Lost connection to the game server.');
-        if (was && typeof quitToMenu === 'function' && typeof gameState !== 'undefined' && gameState !== 'menu') quitToMenu();
-        else navTo('menu-multi');
+        attemptResume();
       });
     });
   }
@@ -520,6 +638,25 @@
     });
   }
 
+  function sendHazard(packet) {
+    if (!Net.role || !Net._raceLive) return;
+    send(Object.assign({ t: 'hz' }, packet));
+  }
+
+  function removeHazard(id) {
+    if (!Net.role || !Net._raceLive || !id) return;
+    send({ t: 'hzgone', id });
+  }
+
+  function sendSpin(targetId, secs) {
+    if (!Net.role || !Net._raceLive || !targetId) return;
+    send({ t: 'spin', target: targetId, secs: secs || 1.1 });
+  }
+
+  function newHazardId() {
+    return 'h' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  }
+
   window.Net = {
     hostRoom, joinRoom, leave, startRace, setLocalName, toggleReady, setReady, syncLook,
     pushLocalState, getRemoteStates: () => Net.remoteStates, getPlayers,
@@ -534,6 +671,9 @@
     onLobbyUpdate: (cb) => Net.lobbyCbs.push(cb),
     onRaceStart: (cb) => Net.startCbs.push(cb),
     onDisconnected: (cb) => Net.discCbs.push(cb),
+    onHazard: (cb) => Net.hazardCbs.push(cb),
+    onSpin: (cb) => Net.spinCbs.push(cb),
+    sendHazard, removeHazard, sendSpin, newHazardId,
     tickRemotes,
     getRoomCode: () => Net.roomCode,
     syncLobbySettings, refreshLobbySettingsUI, returnToLobby, markRaceEnded,

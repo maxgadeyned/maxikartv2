@@ -315,6 +315,53 @@ function onLobby(tracker) {
   tracker.strikes = 0;
 }
 
+const HAZARD_KINDS = new Set(['banana', 'shell', 'fake']);
+
+function sanitizeHazard(msg) {
+  if (!msg || typeof msg !== 'object') return null;
+  const kind = String(msg.kind || '');
+  if (!HAZARD_KINDS.has(kind)) return null;
+  const id = String(msg.id || '').slice(0, 24);
+  if (!id) return null;
+  const x = Number(msg.x), y = Number(msg.y), z = Number(msg.z);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  if (Math.abs(x) > WORLD_LIMIT || Math.abs(z) > WORLD_LIMIT || y > MAX_Y || y < MIN_Y) return null;
+  const h = Number(msg.h) || 0;
+  let vx = Number(msg.vx) || 0;
+  let vz = Number(msg.vz) || 0;
+  const speed = Math.hypot(vx, vz);
+  if (speed > 80) {
+    const s = 80 / speed;
+    vx *= s; vz *= s;
+  }
+  return {
+    t: 'hz',
+    kind,
+    id,
+    x: Math.round(x * 100) / 100,
+    y: Math.round(y * 100) / 100,
+    z: Math.round(z * 100) / 100,
+    h: Math.round(h * 1000) / 1000,
+    vx: Math.round(vx * 100) / 100,
+    vz: Math.round(vz * 100) / 100
+  };
+}
+
+function sanitizeHzGone(msg) {
+  const id = String(msg && msg.id || '').slice(0, 24);
+  if (!id) return null;
+  return { t: 'hzgone', id };
+}
+
+function sanitizeSpin(msg) {
+  const target = String(msg && msg.target || '').slice(0, 64);
+  if (!target) return null;
+  let secs = Number(msg.secs);
+  if (!Number.isFinite(secs)) secs = 1.1;
+  secs = clamp(secs, 0.4, 2.5);
+  return { t: 'spin', target, secs: Math.round(secs * 100) / 100 };
+}
+
 module.exports = {
   createTracker,
   rateOk,
@@ -324,5 +371,8 @@ module.exports = {
   onRaceStart,
   onLobby,
   MAX_STRIKES,
-  sanitizeLook
+  sanitizeLook,
+  sanitizeHazard,
+  sanitizeHzGone,
+  sanitizeSpin
 };
